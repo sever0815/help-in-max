@@ -1,45 +1,58 @@
-from typing import List, Dict, Optional
-from src.models.request import Request, RequestStatus
-from datetime import datetime
+from sqlalchemy.future import select
+from sqlalchemy import update
+from src.db.models import AsyncSessionLocal, RequestDB
+from src.models.request import RequestStatus
 
 class RequestService:
-    def __init__(self):
-        # Временное хранилище в памяти до подключения БД
-        self._requests: Dict[int, Request] = {}
-        self._counter = 1
+    async def create_request(self, beneficiary_id: str, category: str, description: str, address: str):
+        async with AsyncSessionLocal() as session:
+            new_request = RequestDB(
+                beneficiary_id=beneficiary_id,
+                category=category,
+                description=description,
+                address=address,
+                status=RequestStatus.NEW.value
+            )
+            session.add(new_request)
+            await session.commit()
+            await session.refresh(new_request)
+            return new_request
 
-    async def create_request(self, beneficiary_id: str, category: str, description: str, address: str) -> Request:
-        request = Request(
-            id=self._counter,
-            beneficiary_id=beneficiary_id,
-            category=category,
-            description=description,
-            address=address,
-            status=RequestStatus.NEW
-        )
-        self._requests[self._counter] = request
-        self._counter += 1
-        return request
+    async def get_new_requests(self):
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                select(RequestDB).filter(RequestDB.status == RequestStatus.NEW.value)
+            )
+            return result.scalars().all()
 
-    async def get_new_requests(self) -> List[Request]:
-        return [r for r in self._requests.values() if r.status == RequestStatus.NEW]
+    async def accept_request(self, request_id: int, volunteer_id: str):
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                select(RequestDB).filter(RequestDB.id == request_id, RequestDB.status == RequestStatus.NEW.value)
+            )
+            request = result.scalar_one_or_none()
+            if request:
+                request.status = RequestStatus.ACCEPTED.value
+                request.volunteer_id = volunteer_id
+                await session.commit()
+                return request
+            return None
 
-    async def accept_request(self, request_id: int, volunteer_id: str) -> Optional[Request]:
-        request = self._requests.get(request_id)
-        if request and request.status == RequestStatus.NEW:
-            request.status = RequestStatus.ACCEPTED
-            request.volunteer_id = volunteer_id
-            request.updated_at = datetime.now()
-            return request
-        return None
+    async def complete_request(self, request_id: int):
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                select(RequestDB).filter(RequestDB.id == request_id, RequestDB.status == RequestStatus.ACCEPTED.value)
+            )
+            request = result.scalar_one_or_none()
+            if request:
+                request.status = RequestStatus.COMPLETED.value
+                await session.commit()
+                return request
+            return None
 
-    async def complete_request(self, request_id: int) -> Optional[Request]:
-        request = self._requests.get(request_id)
-        if request and request.status == RequestStatus.ACCEPTED:
-            request.status = RequestStatus.COMPLETED
-            request.updated_at = datetime.now()
-            return request
-        return None
-
-    async def get_request_by_id(self, request_id: int) -> Optional[Request]:
-        return self._requests.get(request_id)
+    async def get_request_by_id(self, request_id: int):
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                select(RequestDB).filter(RequestDB.id == request_id)
+            )
+            return result.scalar_one_or_none()
