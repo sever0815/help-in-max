@@ -17,7 +17,7 @@ class VolunteerHandler:
             await self.bot.send_message(user_id, "У вас нет прав для выполнения этой команды.")
             return
 
-        if text == "/view_requests":
+        if text.startswith("/view_requests"):
             requests = await self.request_service.get_new_requests()
             if not requests:
                 await self.bot.send_message(user_id, "На данный момент новых заявок нет.")
@@ -49,6 +49,3 @@ class VolunteerHandler:
                     await self.bot.send_message(user_id, "Не удалось завершить заявку.")
             except (ValueError, IndexError):
                 await self.bot.send_message(user_id, "Неверный формат команды. Используйте: /complete <ID_заявки>")
-        
-        else:
-            await self.bot.send_message(user_id, "Доступные команды: /view_requests, /take <ID>, /complete <ID>")
