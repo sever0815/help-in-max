@@ -1,12 +1,22 @@
 from src.core.base_bot import BaseBot
 from src.services.request_service import RequestService
+from src.services.user_service import UserService
 
 class VolunteerHandler:
-    def __init__(self, bot: BaseBot, request_service: RequestService):
+    def __init__(self, bot: BaseBot, request_service: RequestService, user_service: UserService):
         self.bot = bot
         self.request_service = request_service
+        self.user_service = user_service
+
+    async def _is_authorized(self, user_id: str) -> bool:
+        role = await self.user_service.get_user_role(user_id)
+        return role in ["volunteer", "admin"]
 
     async def handle_message(self, user_id: str, text: str):
+        if not await self._is_authorized(user_id):
+            await self.bot.send_message(user_id, "У вас нет прав для выполнения этой команды.")
+            return
+
         if text == "/view_requests":
             requests = await self.request_service.get_new_requests()
             if not requests:

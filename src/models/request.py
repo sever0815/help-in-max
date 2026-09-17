@@ -22,6 +22,7 @@ class Request(BaseModel):
     category: RequestCategory
     description: str
     address: str
+    scheduled_time: str  # Новое поле
     status: RequestStatus = RequestStatus.NEW
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)

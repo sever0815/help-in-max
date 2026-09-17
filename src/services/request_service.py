@@ -1,21 +1,34 @@
 from sqlalchemy.future import select
-from sqlalchemy import update
 from src.db.models import AsyncSessionLocal, RequestDB
 from src.models.request import RequestStatus
+from src.services.notification_service import NotificationService
 
 class RequestService:
-    async def create_request(self, beneficiary_id: str, category: str, description: str, address: str):
+    def __init__(self, notification_service: NotificationService = None):
+        self.notification_service = notification_service
+
+    async def create_request(self, beneficiary_id: str, category: str, description: str, address: str, scheduled_time: str):
         async with AsyncSessionLocal() as session:
             new_request = RequestDB(
                 beneficiary_id=beneficiary_id,
                 category=category,
                 description=description,
                 address=address,
+                scheduled_time=scheduled_time,
                 status=RequestStatus.NEW.value
             )
             session.add(new_request)
             await session.commit()
             await session.refresh(new_request)
+            
+            # Уведомляем волонтеров
+            if self.notification_service:
+                msg = (f"🔔 Новая заявка #{new_request.id}!\n"
+                       f"Категория: {new_request.category}\n"
+                       f"Адрес: {new_request.address}\n"
+                       f"Время: {new_request.scheduled_time}")
+                await self.notification_service.notify_volunteers(msg)
+            
             return new_request
 
     async def get_new_requests(self):

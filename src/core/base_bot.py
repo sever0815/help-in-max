@@ -8,11 +8,11 @@ class BaseBot(ABC):
         pass
 
     @abstractmethod
-    async def send_keyboard(self, user_id: str, text: str, options: List[str]):
-        """Sends a message with a keyboard (options)."""
+    async def send_keyboard(self, user_id: str, text: str, options: List[str]) -> int:
+        """Sends a message with a keyboard (options) and returns message ID."""
         pass
 
     @abstractmethod
-    async def on_message_received(self, user_id: str, text: str):
-        """Callback for handling incoming messages."""
+    async def edit_message(self, user_id: str, message_id: int, text: str, reply_markup=None):
+        """Edits an existing message."""
         pass
