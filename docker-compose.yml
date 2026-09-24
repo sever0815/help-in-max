@@ -1,9 +1,0 @@
-services:
-  bot:
-    build: .
-    container_name: volunteer_bot
-    restart: always
-    volumes:
-      - .:/app
-    environment:
-      - DATABASE_URL=sqlite+aiosqlite:////app/bot_data.db
