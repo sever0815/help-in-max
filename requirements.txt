@@ -1,0 +1,6 @@
+aiosqlite
+httpx
+sqlalchemy[asyncio]
+python-dotenv
+pydantic
+greenlet
