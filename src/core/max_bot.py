@@ -68,7 +68,13 @@ class MaxBot(BaseBot):
             json_body=payload
         )
         message = (data or {}).get("message") or {}
-        return message.get("body", {}).get("mid") or message.get("mid") or 1
+        mid = message.get("body", {}).get("mid") or message.get("mid") or 1
+        return mid
+
+    async def pin_message(self, message_id: Any) -> bool:
+        """Закрепляет сообщение в чате."""
+        data = await self._api_call("PUT", f"/messages/{message_id}/pin")
+        return data is not None
 
     async def send_keyboard(self, user_id: str, text: str, options: List[str]) -> Any:
         """
@@ -147,21 +153,32 @@ class MaxBot(BaseBot):
         await self.user_service.update_username(user_id, sender.get("username"))
 
         # 2. Маршрутизация команд
-        if text.startswith("/start"):
-            await self.handle_start(user_id)
-        elif text.startswith("/help"):
-            await self.handle_help(user_id)
-        elif text.startswith("/admin_panel"):
-            await self.handle_admin_panel(user_id)
-        elif text.startswith("/list_users"):
-            await self.handle_list_users(user_id)
-        elif text.startswith("/get_id"):
-            await self.handle_get_id(user_id, text)
-        elif text.startswith(("/set_admin", "/remove_admin", "/set_volunteer", "/remove_volunteer")):
-            await self.handle_role_command(user_id, text)
+        if text.startswith("/"):
+            if text.startswith("/start_request"):
+                clean_text = text.lstrip("/")
+                await self.beneficiary_handler.handle_message(user_id, clean_text)
+            elif text.startswith("/start"):
+                await self.handle_start(user_id)
+            elif text.startswith("/help"):
+                await self.handle_help(user_id)
+            elif text.startswith("/admin_panel"):
+                await self.handle_admin_panel(user_id)
+            elif text.startswith("/list_users"):
+                await self.handle_list_users(user_id)
+            elif text.startswith("/get_id"):
+                await self.handle_get_id(user_id, text)
+            elif text.startswith(("/set_admin", "/remove_admin", "/set_volunteer", "/remove_volunteer")):
+                await self.handle_role_command(user_id, text)
+            elif text.startswith(("/take", "/complete", "/view_requests")):
+                clean_text = text.lstrip("/")
+                await self.volunteer_handler.handle_message(user_id, clean_text)
+            else:
+                # Кастомная команда (например /Продукты), передаем без слэша
+                clean_text = text.lstrip("/")
+                await self.beneficiary_handler.handle_message(user_id, clean_text)
+                await self.volunteer_handler.handle_message(user_id, clean_text)
         else:
-            # Всё остальное (включая /start_request, /view_requests, /take, /complete
-            # и ответы на вопросы анкеты) уходит в профильные обработчики
+            # Обычный текст
             await self.beneficiary_handler.handle_message(user_id, text)
             await self.volunteer_handler.handle_message(user_id, text)
 
@@ -189,47 +206,62 @@ class MaxBot(BaseBot):
 
     async def handle_start(self, user_id: str):
         role = await self.user_service.get_user_role(user_id)
-        welcome_text = "Здравствуйте! Это волонтерский бот помощи (MAX Messenger)."
+        welcome_text = "<b>Здравствуйте!</b> Это волонтерский бот помощи (MAX Messenger).\n\n"
         if role == "beneficiary":
-            welcome_text += "\n\nЕсли вам нужна помощь, нажмите /start_request, чтобы описать ситуацию."
-        elif role in ["volunteer", "admin", "superadmin"]:
-            welcome_text += "\n\nВы зарегистрированы как волонтер. Используйте команды для управления заявками."
-        welcome_text += "\n\nНапишите /help, чтобы увидеть все доступные команды."
+            welcome_text += "Если вам нужна помощь, отправьте: <code>/start_request</code>"
+        elif role == "superadmin":
+            welcome_text += "Вы вошли с правами <b>суперадминистратора (superadmin)</b>."
+        elif role == "admin":
+            welcome_text += "Вы вошли с правами <b>администратора (admin)</b>."
+        elif role == "volunteer":
+            welcome_text += "Вы зарегистрированы как <b>волонтер</b>."
+        else:
+            welcome_text += "Ваша роль пока не определена."
+        
+        welcome_text += "\n\nНапишите <code>/help</code>, чтобы увидеть доступные команды."
         await self.send_message(user_id, welcome_text)
 
     async def handle_help(self, user_id: str):
         role = await self.user_service.get_user_role(user_id)
-        if role == "beneficiary":
-            help_text = "<b>🆘 Меню подопечного</b>\n\n/start_request — Создать заявку на помощь"
-        elif role == "volunteer":
-            help_text = (
-                "<b>👷‍♂️ Меню волонтера</b>\n\n"
-                "/view_requests — Список новых заявок\n"
-                "/take &lt;ID&gt; — Взять заявку\n"
-                "/complete &lt;ID&gt; — Завершить заявку"
-            )
-        elif role == "admin":
-            help_text = (
-                "<b>🛡 Меню администратора</b>\n\n"
-                "/view_requests — Список заявок\n"
-                "/set_volunteer &lt;ID&gt; — Назначить волонтера\n"
-                "/remove_volunteer &lt;ID&gt; — Удалить волонтера\n"
-                "/list_users — Список всех пользователей\n"
-                "/get_id — Узнать ID"
-            )
-        elif role == "superadmin":
-            help_text = (
-                "<b>👑 Меню суперадмина</b>\n\n"
-                "/set_admin &lt;ID&gt; — Назначить админа\n"
-                "/remove_admin &lt;ID&gt; — Удалить админа\n"
-                "/set_volunteer &lt;ID&gt; — Назначить волонтера\n"
-                "/remove_volunteer &lt;ID&gt; — Удалить волонтера\n"
-                "/list_users — Список всех пользователей\n"
-                "/get_id — Узнать ID"
-            )
-        else:
-            help_text = "Ваша роль не определена."
-        await self.send_message(user_id, help_text)
+        
+        # Определяем команды по ролям
+        commands = {
+            "beneficiary": [("/start_request", "Создать заявку на помощь")],
+            "volunteer": [
+                ("/view_requests", "Список новых заявок"),
+                ("/take <ID>", "Взять заявку"),
+                ("/complete <ID>", "Завершить заявку")
+            ],
+            "admin": [
+                ("/view_requests", "Список заявок"),
+                ("/set_volunteer <ID>", "Назначить волонтера"),
+                ("/remove_volunteer <ID>", "Удалить волонтера"),
+                ("/list_users", "Список всех пользователей"),
+                ("/get_id", "Узнать ID")
+            ],
+            "superadmin": [
+                ("/set_admin <ID>", "Назначить админа"),
+                ("/remove_admin <ID>", "Удалить админа"),
+                ("/set_volunteer <ID>", "Назначить волонтера"),
+                ("/remove_volunteer <ID>", "Удалить волонтера"),
+                ("/list_users", "Список всех пользователей"),
+                ("/get_id", "Узнать ID")
+            ]
+        }
+        
+        cmds = commands.get(role, [])
+        if not cmds:
+            await self.send_message(user_id, "Ваша роль не определена.")
+            return
+
+        help_text = f"<b>🔧 Доступные команды ({role}):</b>\n\n"
+        for cmd, desc in cmds:
+            help_text += f"🔹 <b>{cmd}</b> — {desc}\n"
+        help_text += "\n<i>Нажмите на команду или скопируйте её, чтобы вставить в сообщение.</i>"
+            
+        mid = await self.send_message(user_id, help_text)
+        # Пробуем закрепить сообщение
+        await self.pin_message(mid)
 
     async def handle_admin_panel(self, user_id: str):
         user_role = await self.user_service.get_user_role(user_id)
@@ -251,9 +283,9 @@ class MaxBot(BaseBot):
             await self.send_message(user_id, "У вас нет прав.")
             return
         users = await self.user_service.list_users()
-        response = "Список пользователей:\n"
+        response = "<b>Список пользователей:</b>\n"
         for user in users:
-            response += f"ID: {user.platform_user_id} | Роль: {user.role} | Юзернейм: @{user.username or 'нет'}\n"
+            response += f"• ID: <code>{user.platform_user_id}</code> | Роль: <b>{user.role}</b>\n"
         await self.send_message(user_id, response)
 
     async def handle_get_id(self, user_id: str, text: str):
@@ -292,8 +324,22 @@ class MaxBot(BaseBot):
             success, msg = await self.user_service.remove_role(target_id, user_id)
             await self.send_message(user_id, msg)
 
+    async def set_bot_commands(self):
+        """Регистрирует команды в платформе для отображения в меню '/' (используя поле 'name')."""
+        commands = [
+            {"name": "start", "description": "Запуск бота"},
+            {"name": "help", "description": "Список всех команд"},
+            {"name": "start_request", "description": "Создать заявку на помощь"},
+            {"name": "view_requests", "description": "Список заявок"},
+            {"name": "get_id", "description": "Узнать свой ID"}
+        ]
+        await self._api_call("PATCH", "/me/commands", json_body={"commands": commands})
+
     async def run(self):
         """Long-polling цикл получения updates от MAX API."""
+        # Регистрируем команды при запуске бота
+        await self.set_bot_commands()
+        
         self.running = True
         logger.info("MaxBot started polling /updates...")
         while self.running:

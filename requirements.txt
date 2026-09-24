@@ -1,7 +1,6 @@
-pydantic>=2.0.0
-sqlalchemy>=2.0.0
 aiosqlite
+httpx
+sqlalchemy[asyncio]
 python-dotenv
-pytest
-pytest-asyncio
-httpx>=0.24.0
+pydantic
+greenlet

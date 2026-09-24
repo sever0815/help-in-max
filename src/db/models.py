@@ -1,11 +1,11 @@
+import os
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy import Column, Integer, String, text
-import os
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./bot_data.db")
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:////app/bot_data.db")
 
-engine = create_async_engine(DATABASE_URL, echo=False)
+engine = create_async_engine(DATABASE_URL, echo=True)
 AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 Base = declarative_base()
 
@@ -42,5 +42,7 @@ async def _migrate_legacy_columns(conn):
 
 async def init_db():
     async with engine.begin() as conn:
-        await _migrate_legacy_columns(conn)
+        # Создаем таблицы, если их нет
         await conn.run_sync(Base.metadata.create_all)
+        # Обрабатываем старые колонки, если база уже была
+        await _migrate_legacy_columns(conn)

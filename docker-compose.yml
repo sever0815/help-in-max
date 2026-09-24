@@ -4,6 +4,6 @@ services:
     container_name: volunteer_bot
     restart: always
     volumes:
-      - ./bot_data.db:/app/bot_data.db
-    env_file:
-      - .env
+      - .:/app
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:////app/bot_data.db
