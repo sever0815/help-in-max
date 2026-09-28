@@ -226,11 +226,10 @@ class MaxBot(BaseBot):
         callback = update.get("callback") or {}
         callback_id = callback.get("callback_id") or callback.get("id")
         payload = str(callback.get("payload") or "")
-        logger.info(f"_handle_message_callback: user_id={user_id}, payload={payload[:80]}")
-
         # Для message_callback user_id берётся из callback.user.user_id
         callback_user = callback.get("user") or {}
         user_id = str(callback_user.get("user_id", ""))
+        logger.info(f"_handle_message_callback: user_id={user_id}, payload={payload[:80]}")
         if not user_id:
             return
 
