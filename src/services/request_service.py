@@ -11,29 +11,33 @@ class RequestService:
         self.notification_service = notification_service
 
     async def create_request(self, beneficiary_id: str, category: str, description: str, address: str, scheduled_time: str, phone: str = ""):
-        async with AsyncSessionLocal() as session:
-            new_request = RequestDB(
-                beneficiary_id=beneficiary_id,
-                category=category,
-                description=description,
-                address=address,
-                scheduled_time=scheduled_time,
-                phone=phone,
-                status=RequestStatus.NEW.value
-            )
-            session.add(new_request)
-            await session.commit()
-            await session.refresh(new_request)
-            
-            # Уведомляем волонтеров
-            if self.notification_service:
-                msg = (f"🔔 Новая заявка #{new_request.id}!\n"
-                       f"Категория: {new_request.category}\n"
-                       f"Адрес: {new_request.address}\n"
-                       f"Время: {new_request.scheduled_time}")
-                await self.notification_service.notify_volunteers(msg)
-            
-            return new_request
+        try:
+            async with AsyncSessionLocal() as session:
+                new_request = RequestDB(
+                    beneficiary_id=beneficiary_id,
+                    category=category,
+                    description=description,
+                    address=address,
+                    scheduled_time=scheduled_time,
+                    phone=phone,
+                    status=RequestStatus.NEW.value
+                )
+                session.add(new_request)
+                await session.commit()
+                await session.refresh(new_request)
+
+                # Уведомляем волонтеров
+                if self.notification_service:
+                    msg = (f"🔔 Новая заявка #{new_request.id}!\n"
+                           f"Категория: {new_request.category}\n"
+                           f"Адрес: {new_request.address}\n"
+                           f"Время: {new_request.scheduled_time}")
+                    await self.notification_service.notify_volunteers(msg)
+
+                return new_request
+        except Exception as e:
+            logger.exception(f"Error creating request: {e}")
+            raise
 
     async def get_new_requests(self):
         async with AsyncSessionLocal() as session:

@@ -259,6 +259,10 @@ class MaxBot(BaseBot):
                     await self.handle_role_command(user_id, payload)
                 elif payload.startswith("/set_name"):
                     await self.handle_set_name(user_id, payload)
+                elif payload.startswith("copy_id:"):
+                    # Отправляем ID отдельным сообщением для копирования
+                    id_to_copy = payload.split(":", 1)[1]
+                    await self.send_message(user_id, f"ID: {id_to_copy}")
                 else:
                     await self.beneficiary_handler.handle_message(user_id, payload.lstrip("/"))
             else:
@@ -383,6 +387,7 @@ class MaxBot(BaseBot):
             return (u.full_name or "", u.platform_user_id)
 
         response = "<b>📋 Список пользователей:</b>\n\n"
+        keyboard_rows = []
         for cat_name, cat_users in categories.items():
             if not cat_users:
                 continue
@@ -390,10 +395,11 @@ class MaxBot(BaseBot):
             response += f"<b>{cat_name}:</b>\n"
             for user in cat_users:
                 name_str = f" | ФИО: {user.full_name}" if user.full_name else ""
-                # ID обёрнут в <code> для копирования по нажатию
-                response += f"  • <code>{user.platform_user_id}</code>{name_str}\n"
+                response += f"  • {user.platform_user_id}{name_str}\n"
+                # Кнопка с ID — при нажатии бот отправит ID сообщением для копирования
+                keyboard_rows.append([{"type": "callback", "text": f"📋 {user.platform_user_id}", "payload": f"copy_id:{user.platform_user_id}"}])
             response += "\n"
-        await self.send_message(user_id, response)
+        await self.send_message(user_id, response, reply_markup=keyboard_rows)
 
     async def handle_set_name(self, user_id: str, text: str):
         parts = text.split(maxsplit=2)
