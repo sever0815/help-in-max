@@ -206,6 +206,8 @@ class MaxBot(BaseBot):
                 await self.handle_get_id(user_id, text)
             elif text.startswith(("/set_admin", "/remove_admin", "/set_volunteer", "/remove_volunteer")):
                 await self.handle_role_command(user_id, text)
+            elif text.startswith("/set_name"):
+                await self.handle_set_name(user_id, text)
             elif text.startswith(("/take", "/complete", "/view_requests")):
                 await self.volunteer_handler.handle_message(user_id, text)
             else:
@@ -252,6 +254,8 @@ class MaxBot(BaseBot):
                     await self.handle_get_id(user_id, payload)
                 elif payload.startswith(("/set_admin", "/remove_admin", "/set_volunteer", "/remove_volunteer")):
                     await self.handle_role_command(user_id, payload)
+                elif payload.startswith("/set_name"):
+                    await self.handle_set_name(user_id, payload)
                 else:
                     await self.beneficiary_handler.handle_message(user_id, payload.lstrip("/"))
             else:
@@ -303,6 +307,7 @@ class MaxBot(BaseBot):
                 ("/view_requests", "Список заявок"),
                 ("/set_volunteer <ID>", "Назначить волонтера"),
                 ("/remove_volunteer <ID>", "Удалить волонтера"),
+                ("/set_name <ID> <ФИО>", "Добавить ФИО пользователя"),
                 ("/list_users", "Список всех пользователей"),
                 ("/get_id", "Узнать ID")
             ],
@@ -311,6 +316,7 @@ class MaxBot(BaseBot):
                 ("/remove_admin <ID>", "Удалить админа"),
                 ("/set_volunteer <ID>", "Назначить волонтера"),
                 ("/remove_volunteer <ID>", "Удалить волонтера"),
+                ("/set_name <ID> <ФИО>", "Добавить ФИО пользователя"),
                 ("/list_users", "Список всех пользователей"),
                 ("/get_id", "Узнать ID")
             ]
@@ -341,6 +347,7 @@ class MaxBot(BaseBot):
             panel_text = "<b>🛡 Панель управления:</b>\n"
             panel_text += "• Отправьте <code>/set_volunteer &lt;ID&gt;</code> для назначения волонтера\n"
             panel_text += "• Отправьте <code>/remove_volunteer &lt;ID&gt;</code> для удаления волонтера\n"
+            panel_text += "• Отправьте <code>/set_name &lt;ID&gt; &lt;ФИО&gt;</code> для добавления ФИО пользователя\n"
             panel_text += "• Отправьте <code>/list_users</code> для просмотра пользователей\n"
             if user_role == "superadmin":
                 panel_text += "• Отправьте <code>/set_admin &lt;ID&gt;</code> для назначения администратора\n"
@@ -355,10 +362,45 @@ class MaxBot(BaseBot):
             await self.send_message(user_id, "У вас нет прав.")
             return
         users = await self.user_service.list_users()
-        response = "<b>Список пользователей:</b>\n"
+
+        # Группировка по категориям
+        categories = {
+            "Администраторы": [],
+            "Волонтёры": [],
+            "Подопечные": []
+        }
         for user in users:
-            response += f"• ID: <code>{user.platform_user_id}</code> | Роль: <b>{user.role}</b>\n"
+            if user.role in ("admin", "superadmin"):
+                categories["Администраторы"].append(user)
+            elif user.role == "volunteer":
+                categories["Волонтёры"].append(user)
+            else:
+                categories["Подопечные"].append(user)
+
+        # Сортировка по ФИО (если есть), затем по ID
+        def sort_key(u):
+            return (u.full_name or "", u.platform_user_id)
+
+        response = "<b>📋 Список пользователей:</b>\n\n"
+        for cat_name, cat_users in categories.items():
+            if not cat_users:
+                continue
+            cat_users.sort(key=sort_key)
+            response += f"<b>{cat_name}:</b>\n"
+            for user in cat_users:
+                name_str = f" | ФИО: {user.full_name}" if user.full_name else ""
+                response += f"  • ID: <code>{user.platform_user_id}</code>{name_str}\n"
+            response += "\n"
         await self.send_message(user_id, response)
+
+    async def handle_set_name(self, user_id: str, text: str):
+        parts = text.split(maxsplit=2)
+        if len(parts) < 3:
+            await self.send_message(user_id, "Использование: /set_name <ID> <ФИО>")
+            return
+        _, target_id, full_name = parts
+        success, msg = await self.user_service.set_user_name(target_id, full_name, user_id)
+        await self.send_message(user_id, msg)
 
     async def handle_get_id(self, user_id: str, text: str):
         args = text.split()

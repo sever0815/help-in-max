@@ -26,6 +26,7 @@ class UserDB(Base):
     # Идентификатор пользователя в мессенджере (MAX и т.п.)
     platform_user_id = Column(String, unique=True, index=True)
     username = Column(String, nullable=True, index=True)
+    full_name = Column(String, nullable=True)
     role = Column(String)  # "superadmin", "admin", "volunteer", "beneficiary"
 
 async def _migrate_legacy_columns(conn):
@@ -39,6 +40,8 @@ async def _migrate_legacy_columns(conn):
     cols = {row[1] for row in res.fetchall()}
     if "platform_user_id" not in cols and "telegram_id" in cols:
         await conn.execute(text("ALTER TABLE users RENAME COLUMN telegram_id TO platform_user_id"))
+    if "full_name" not in cols:
+        await conn.execute(text("ALTER TABLE users ADD COLUMN full_name TEXT"))
 
 async def init_db():
     async with engine.begin() as conn:

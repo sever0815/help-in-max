@@ -81,6 +81,28 @@ class UserService:
                 return True, "Роль успешно сброшена до подопечного."
             return False, "Пользователь не найден."
 
+    async def set_user_name(self, target_id: str, full_name: str, actor_id: str):
+        """Установить ФИО пользователя (только для admin/superadmin)."""
+        actor_role = await self.get_user_role(actor_id)
+        actor_power = self.get_role_power(actor_role)
+        if actor_power < 2:
+            return False, "У вас нет прав для выполнения этой команды."
+
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                select(UserDB).filter(UserDB.platform_user_id == str(target_id))
+            )
+            user = result.scalar_one_or_none()
+            if user:
+                user.full_name = full_name
+                await session.commit()
+                return True, f"ФИО пользователя {target_id} обновлено: {full_name}"
+            else:
+                new_user = UserDB(platform_user_id=str(target_id), full_name=full_name, role="beneficiary")
+                session.add(new_user)
+                await session.commit()
+                return True, f"Пользователь {target_id} добавлен с ФИО: {full_name}"
+
     async def list_users(self):
         async with AsyncSessionLocal() as session:
             result = await session.execute(select(UserDB))
