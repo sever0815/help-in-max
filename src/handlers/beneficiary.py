@@ -37,6 +37,7 @@ class BeneficiaryHandler:
     async def handle_message(self, user_id: str, text: str):
         state_data = self.user_states.get(user_id, {"state": BeneficiaryState.IDLE})
         state = state_data["state"]
+        logger.info(f"beneficiary_handler: user_id={user_id}, state={state}, text={text[:50]}")
 
         # === НАЧАЛО /start_request ===
         if text == "/start_request":
