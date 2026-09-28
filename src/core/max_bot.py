@@ -285,11 +285,9 @@ class MaxBot(BaseBot):
             welcome_text += "Ваша роль пока не определена."
         
         welcome_text += "\n\nНапишите <code>/help</code>, чтобы увидеть доступные команды."
-        keyboard_rows = [
-            [{"type": "callback", "text": "/start", "payload": "/start"}],
-        ]
+        keyboard_rows = []
         if role == "beneficiary":
-            keyboard_rows.insert(0, [{"type": "callback", "text": "/start_request", "payload": "/start_request"}])
+            keyboard_rows.append([{"type": "callback", "text": "/start_request", "payload": "/start_request"}])
         await self.send_message(user_id, welcome_text, reply_markup=keyboard_rows)
 
     async def handle_help(self, user_id: str):
