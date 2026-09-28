@@ -164,7 +164,9 @@ class BeneficiaryHandler:
 
         # === ШАГ 5: Подтверждение ===
         if state == BeneficiaryState.CONFIRMATION:
+            logger.info(f"CONFIRMATION state reached: text={text}")
             if text == "Отправить" or text == "Отправить заявку":
+                logger.info(f"Creating request: {state_data}")
                 await self.request_service.create_request(
                     user_id,
                     state_data.get("category"),
