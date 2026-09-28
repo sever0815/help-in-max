@@ -41,7 +41,8 @@ class UserService:
             return False, "У вас недостаточно прав для изменения этой роли."
 
         # 4. Запрет: Нельзя повышать кого-то до своего уровня или выше
-        if new_role_power >= actor_power:
+        # (админ может назначать волонтеров, но не других админов)
+        if new_role_power >= actor_power and new_role != "volunteer":
             return False, "Вы не можете назначать роль равную или выше вашей."
 
         async with AsyncSessionLocal() as session:

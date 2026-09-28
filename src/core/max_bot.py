@@ -390,7 +390,8 @@ class MaxBot(BaseBot):
             response += f"<b>{cat_name}:</b>\n"
             for user in cat_users:
                 name_str = f" | ФИО: {user.full_name}" if user.full_name else ""
-                response += f"  • ID: <code>{user.platform_user_id}</code>{name_str}\n"
+                # ID обёрнут в <code> для копирования по нажатию
+                response += f"  • <code>{user.platform_user_id}</code>{name_str}\n"
             response += "\n"
         await self.send_message(user_id, response)
 
