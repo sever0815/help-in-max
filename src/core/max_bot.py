@@ -397,7 +397,7 @@ class MaxBot(BaseBot):
     async def handle_set_name(self, user_id: str, text: str):
         parts = text.split(maxsplit=2)
         if len(parts) < 3:
-            await self.send_message(user_id, "Использование: /set_name <ID> <ФИО>")
+            await self.send_message(user_id, "Использование: /set_name <ID> <ФИО>\n\nПример: /set_name 387041392 Иванов Иван Иванович")
             return
         _, target_id, full_name = parts
         success, msg = await self.user_service.set_user_name(target_id, full_name, user_id)
