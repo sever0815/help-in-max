@@ -1,7 +1,10 @@
+import logging
 from enum import Enum
 from typing import Dict, Any
 from src.core.base_bot import BaseBot
 from src.services.request_service import RequestService
+
+logger = logging.getLogger(__name__)
 
 class BeneficiaryState(Enum):
     IDLE = "idle"
