@@ -18,6 +18,7 @@ class RequestDB(Base):
     description = Column(String)
     address = Column(String)
     scheduled_time = Column(String)
+    phone = Column(String, nullable=True)
     status = Column(String)
 
 class UserDB(Base):
@@ -42,6 +43,10 @@ async def _migrate_legacy_columns(conn):
         await conn.execute(text("ALTER TABLE users RENAME COLUMN telegram_id TO platform_user_id"))
     if "full_name" not in cols:
         await conn.execute(text("ALTER TABLE users ADD COLUMN full_name TEXT"))
+    res = await conn.execute(text("PRAGMA table_info(requests)"))
+    req_cols = {row[1] for row in res.fetchall()}
+    if "phone" not in req_cols:
+        await conn.execute(text("ALTER TABLE requests ADD COLUMN phone TEXT"))
 
 async def init_db():
     async with engine.begin() as conn:

@@ -23,9 +23,35 @@ class VolunteerHandler:
                 await self.bot.send_message(user_id, "Заявок нет")
                 return
 
+            # Получаем ФИО пользователей
+            user_ids = [r.beneficiary_id for r in requests]
+            user_names = {}
+            for uid in user_ids:
+                role = await self.user_service.get_user_role(uid)
+                # Получаем ФИО из базы
+                from src.db.models import AsyncSessionLocal, UserDB
+                from sqlalchemy.future import select
+                async with AsyncSessionLocal() as session:
+                    result = await session.execute(
+                        select(UserDB).filter(UserDB.platform_user_id == str(uid))
+                    )
+                    user = result.scalar_one_or_none()
+                    if user and user.full_name:
+                        user_names[uid] = user.full_name
+                    else:
+                        user_names[uid] = "—"
+
             response = "Список доступных заявок:\n"
             for r in requests:
-                response += f"ID: {r.id}, Категория: {r.category}, Адрес: {r.address}\n"
+                name = user_names.get(r.beneficiary_id, "—")
+                phone = r.phone or "—"
+                response += (f"ID: {r.id}\n"
+                             f"  Категория: {r.category}\n"
+                             f"  Адрес: {r.address}\n"
+                             f"  Время: {r.scheduled_time}\n"
+                             f"  Телефон: {phone}\n"
+                             f"  Детали: {r.description or '—'}\n"
+                             f"  ФИО: {name}\n\n")
             await self.bot.send_message(user_id, response)
 
         elif text.startswith("/take "):

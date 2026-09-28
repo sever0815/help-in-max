@@ -1,13 +1,16 @@
+import logging
 from sqlalchemy.future import select
 from src.db.models import AsyncSessionLocal, RequestDB
 from src.models.request import RequestStatus
 from src.services.notification_service import NotificationService
 
+logger = logging.getLogger(__name__)
+
 class RequestService:
     def __init__(self, notification_service: NotificationService = None):
         self.notification_service = notification_service
 
-    async def create_request(self, beneficiary_id: str, category: str, description: str, address: str, scheduled_time: str):
+    async def create_request(self, beneficiary_id: str, category: str, description: str, address: str, scheduled_time: str, phone: str = ""):
         async with AsyncSessionLocal() as session:
             new_request = RequestDB(
                 beneficiary_id=beneficiary_id,
@@ -15,6 +18,7 @@ class RequestService:
                 description=description,
                 address=address,
                 scheduled_time=scheduled_time,
+                phone=phone,
                 status=RequestStatus.NEW.value
             )
             session.add(new_request)

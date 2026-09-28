@@ -10,6 +10,7 @@ class BeneficiaryState(Enum):
     PROVIDING_ADDRESS = "providing_address"
     CHOOSING_TIME = "choosing_time"
     CHOOSING_TIME_CUSTOM = "choosing_time_custom"
+    PROVIDING_PHONE = "providing_phone"
     ASKING_DETAILS = "asking_details"
     CONFIRMATION = "confirmation"
 
@@ -108,17 +109,30 @@ class BeneficiaryHandler:
                 "Через 3 часа": "через 3 часа"
             }
             state_data["scheduled_time"] = time_map.get(text, text)
-            state_data["state"] = BeneficiaryState.ASKING_DETAILS
-            await self.bot.send_message(user_id, "Есть ли что-то дополнительное, что стоит учесть? (можно пропустить)")
-            msg_id = await self.bot.send_keyboard(user_id, "Дополнительные детали", ["Да, есть", "Нет, спасибо"])
+            state_data["state"] = BeneficiaryState.PROVIDING_PHONE
+            msg_id = await self.bot.send_keyboard(user_id, "Укажите номер телефона или пропустите:", ["Пропустить"])
             state_data["last_msg_id"] = msg_id
-            state_data["last_text"] = "Есть ли что-то дополнительное?"
+            state_data["last_text"] = "Укажите номер телефона или пропустите:"
             self.user_states[user_id] = state_data
             return
 
         # === ШАГ 3b: Ввод своего времени ===
         if state == BeneficiaryState.CHOOSING_TIME_CUSTOM:
             state_data["scheduled_time"] = text
+            state_data["state"] = BeneficiaryState.PROVIDING_PHONE
+            msg_id = await self.bot.send_keyboard(user_id, "Укажите номер телефона или пропустите:", ["Пропустить"])
+            state_data["last_msg_id"] = msg_id
+            state_data["last_text"] = "Укажите номер телефона или пропустите:"
+            self.user_states[user_id] = state_data
+            return
+
+        # === ШАГ 3c: Ввод телефона ===
+        if state == BeneficiaryState.PROVIDING_PHONE:
+            await self._clear_prev_keyboard(user_id)
+            if text == "Пропустить":
+                state_data["phone"] = ""
+            else:
+                state_data["phone"] = text
             state_data["state"] = BeneficiaryState.ASKING_DETAILS
             await self.bot.send_message(user_id, "Есть ли что-то дополнительное, что стоит учесть? (можно пропустить)")
             msg_id = await self.bot.send_keyboard(user_id, "Дополнительные детали", ["Да, есть", "Нет, спасибо"])
@@ -156,12 +170,13 @@ class BeneficiaryHandler:
                     state_data.get("category"),
                     state_data.get("details", ""),
                     state_data.get("address"),
-                    state_data.get("scheduled_time")
+                    state_data.get("scheduled_time"),
+                    state_data.get("phone", "")
                 )
                 self.user_states[user_id] = {"state": BeneficiaryState.IDLE}
                 await self.bot.send_message(user_id, "Спасибо! Ваша заявка принята и передана волонтёрам.")
-            elif text == "Изменить" or text in ("Изменить тип", "Изменить адрес", "Изменить время", "Изменить детали"):
-                if text in ("Изменить тип", "Изменить адрес", "Изменить время", "Изменить детали"):
+            elif text == "Изменить" or text in ("Изменить тип", "Изменить адрес", "Изменить время", "Изменить телефон", "Изменить детали"):
+                if text in ("Изменить тип", "Изменить адрес", "Изменить время", "Изменить телефон", "Изменить детали"):
                     # Переходим к нужному шагу
                     if text == "Изменить тип":
                         state_data["state"] = BeneficiaryState.CHOOSING_HELP_TYPE
@@ -182,6 +197,11 @@ class BeneficiaryHandler:
                         msg_id = await self.bot.send_keyboard(user_id, "Выберите время или укажите своё:", time_buttons)
                         state_data["last_msg_id"] = msg_id
                         state_data["last_text"] = "Когда вам нужна помощь?"
+                    elif text == "Изменить телефон":
+                        state_data["state"] = BeneficiaryState.PROVIDING_PHONE
+                        msg_id = await self.bot.send_keyboard(user_id, "Укажите номер телефона или пропустите:", ["Пропустить"])
+                        state_data["last_msg_id"] = msg_id
+                        state_data["last_text"] = "Укажите номер телефона или пропустите:"
                     elif text == "Изменить детали":
                         state_data["state"] = BeneficiaryState.ASKING_DETAILS
                         await self.bot.send_message(user_id, "Есть ли что-то дополнительное?")
@@ -201,10 +221,12 @@ class BeneficiaryHandler:
 
     async def _show_confirmation(self, user_id: str, state_data: dict):
         s = state_data
+        phone_str = s.get('phone', '') or '—'
         summary = (f"📋 <b>Проверьте заявку:</b>\n\n"
                    f"👕 Тип помощи: <b>{s.get('category', '—')}</b>\n"
                    f"📍 Адрес: <b>{s.get('address', '—')}</b>\n"
                    f"🕐 Время: <b>{s.get('scheduled_time', '—')}</b>\n"
+                   f"📞 Телефон: <b>{phone_str}</b>\n"
                    f"📝 Детали: <b>{s.get('details', '—')}</b>\n\n"
                    "Отправить заявку?")
         msg_id = await self.bot.send_keyboard(
@@ -220,6 +242,7 @@ class BeneficiaryHandler:
             [{"type": "callback", "text": "Изменить тип", "payload": "Изменить тип"}],
             [{"type": "callback", "text": "Изменить адрес", "payload": "Изменить адрес"}],
             [{"type": "callback", "text": "Изменить время", "payload": "Изменить время"}],
+            [{"type": "callback", "text": "Изменить телефон", "payload": "Изменить телефон"}],
             [{"type": "callback", "text": "Изменить детали", "payload": "Изменить детали"}],
             [{"type": "callback", "text": "Отмена", "payload": "Отмена"}]
         ]
