@@ -12,6 +12,7 @@ class BeneficiaryState(Enum):
     CHOOSING_TIME_CUSTOM = "choosing_time_custom"
     PROVIDING_PHONE = "providing_phone"
     ASKING_DETAILS = "asking_details"
+    DESCRIBING_DETAILS = "describing_details"
     CONFIRMATION = "confirmation"
 
 class BeneficiaryHandler:
