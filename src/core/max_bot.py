@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 import httpx
 from typing import Any, Dict, List, Optional
 from sqlalchemy.future import select
@@ -36,6 +37,7 @@ class MaxBot(BaseBot):
         )
         self.running = False
         self.marker: Optional[int] = None
+        self._start_times: Dict[str, float] = {}  # Для отслеживания времени handle_start
 
     # ---------- Низкоуровневые вызовы API ----------
 
@@ -196,7 +198,9 @@ class MaxBot(BaseBot):
                 await self.user_service.update_username(user_id, sender.get("username"))
                 await self.beneficiary_handler.handle_message(user_id, text)
             elif text.startswith("/start"):
-                await self.handle_start(user_id)
+                last_start = self._start_times.get(user_id, 0)
+                if time.time() - last_start > 5:
+                    await self.handle_start(user_id)
             elif text.startswith("/help"):
                 await self.handle_help(user_id)
             elif text.startswith("/admin_panel"):
@@ -272,6 +276,7 @@ class MaxBot(BaseBot):
                     pass
 
     async def handle_start(self, user_id: str):
+        self._start_times[user_id] = time.time()
         role = await self.user_service.get_user_role(user_id)
         welcome_text = "<b>Здравствуйте!</b> Это волонтерский бот помощи (MAX Messenger).\n\n"
         if role == "beneficiary":
