@@ -216,7 +216,10 @@ class MaxBot(BaseBot):
                 await self.beneficiary_handler.handle_message(user_id, clean_text)
         else:
             # Обычный текст — только beneficiary
-            await self.beneficiary_handler.handle_message(user_id, text)
+            try:
+                await self.beneficiary_handler.handle_message(user_id, text)
+            except Exception as e:
+                logger.exception(f"Error in beneficiary_handler: {e}")
 
     async def _handle_message_callback(self, update: dict):
         """Обработка нажатий на inline-кнопки (type='callback')."""
