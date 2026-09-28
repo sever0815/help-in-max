@@ -76,7 +76,6 @@ class MaxBot(BaseBot):
             reply_markup = [help_row]
         payload: Dict[str, Any] = {"text": text, "format": "html"}
         payload["attachments"] = self._build_keyboard(reply_markup)
-        logger.info(f"Sending message to {user_id}: {text[:50]}...")
         data = await self._api_call(
             "POST", "/messages",
             params={"user_id": user_id},
@@ -106,7 +105,6 @@ class MaxBot(BaseBot):
         body: Dict[str, Any] = {"message": {"text": text}}
         if attachments:
             body["message"]["attachments"] = attachments
-        logger.info(f"answer_callback: callback_id={callback_id[:20]}...")
         await self._api_call("POST", "/answers", params={"callback_id": callback_id}, json_body=body)
 
     async def edit_message(self, user_id: str, message_id: Any, text: str, reply_markup=None):
@@ -164,8 +162,6 @@ class MaxBot(BaseBot):
         body = message.get("body") or {}
         text = (body.get("text") or "").strip()
 
-        logger.info(f"_handle_message_created: user_id={user_id}, text={text[:80]}")
-
         # Fallback: сообщение с контактом/кнопкой без текста — игнорируем
         if not user_id or not text:
             return
@@ -178,7 +174,6 @@ class MaxBot(BaseBot):
         if state_data and state_data.get("pending_role_command"):
             cmd = state_data["pending_role_command"]
             target_id = text.strip()
-            logger.info(f"Pending role command: {cmd}, target_id: {target_id}")
             role_map = {
                 "/set_admin": "admin",
                 "/remove_admin": "beneficiary",
@@ -218,12 +213,8 @@ class MaxBot(BaseBot):
                 clean_text = text.lstrip("/")
                 await self.beneficiary_handler.handle_message(user_id, clean_text)
         else:
-            logger.info(f"Plain text from {user_id}: {text[:50]}")
             # Обычный текст — только beneficiary
-            try:
-                await self.beneficiary_handler.handle_message(user_id, text)
-            except Exception as e:
-                logger.exception(f"Error in beneficiary_handler: {e}")
+            await self.beneficiary_handler.handle_message(user_id, text)
 
     async def _handle_message_callback(self, update: dict):
         """Обработка нажатий на inline-кнопки (type='callback')."""
@@ -233,7 +224,6 @@ class MaxBot(BaseBot):
         # Для message_callback user_id берётся из callback.user.user_id
         callback_user = callback.get("user") or {}
         user_id = str(callback_user.get("user_id", ""))
-        logger.info(f"_handle_message_callback: user_id={user_id}, payload={payload[:80]}")
         if not user_id:
             return
 

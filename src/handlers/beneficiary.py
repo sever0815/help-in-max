@@ -1,10 +1,7 @@
 from enum import Enum
 from typing import Dict, Any
-import logging
 from src.core.base_bot import BaseBot
 from src.services.request_service import RequestService
-
-logger = logging.getLogger(__name__)
 
 class BeneficiaryState(Enum):
     IDLE = "idle"
@@ -36,7 +33,6 @@ class BeneficiaryHandler:
     async def handle_message(self, user_id: str, text: str):
         state_data = self.user_states.get(user_id, {"state": BeneficiaryState.IDLE})
         state = state_data["state"]
-        logger.info(f"Beneficiary handle_message: user_id={user_id}, state={state.value}, text={text[:50]}")
 
         # === НАЧАЛО /start_request ===
         if text == "/start_request":
