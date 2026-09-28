@@ -8,6 +8,7 @@ class BeneficiaryState(Enum):
     CHOOSING_HELP_TYPE = "choosing_help_type"
     PROVIDING_ADDRESS = "providing_address"
     CHOOSING_TIME = "choosing_time"
+    CHOOSING_TIME_CUSTOM = "choosing_time_custom"
     ASKING_DETAILS = "asking_details"
     CONFIRMATION = "confirmation"
 
@@ -82,28 +83,41 @@ class BeneficiaryHandler:
         if state == BeneficiaryState.PROVIDING_ADDRESS:
             state_data["address"] = text
             state_data["state"] = BeneficiaryState.CHOOSING_TIME
-            await self.bot.send_message(user_id, "Когда вам нужна помощь?")
-            time_buttons = ["Сейчас", "Через 10 мин", "Через 30 мин", "Через 1 час", "Через 2 часа", "Указать время"]
-            msg_id = await self.bot.send_keyboard(user_id, "Выберите время или укажите своё:", time_buttons)
+            time_buttons = ["Сейчас", "Через 10 мин", "Через 30 мин", "Через 1 час", "Через 2 часа", "Через 3 часа", "Указать время"]
+            msg_id = await self.bot.send_keyboard(user_id, "Когда вам нужна помощь? Выберите время или укажите своё:", time_buttons)
             state_data["last_msg_id"] = msg_id
             state_data["last_text"] = "Когда вам нужна помощь?"
             self.user_states[user_id] = state_data
             return
 
-        # === ШАГ 3: Время ===
+        # === ШАГ 3: Время (выбор из вариантов) ===
         if state == BeneficiaryState.CHOOSING_TIME:
             await self._clear_prev_keyboard(user_id)
+            if text == "Указать время":
+                state_data["state"] = BeneficiaryState.CHOOSING_TIME_CUSTOM
+                await self.bot.send_message(user_id, "Введите желаемое время (например: 14:30, завтра 10:00, через 45 минут):")
+                self.user_states[user_id] = state_data
+                return
             time_map = {
                 "Сейчас": "сейчас",
                 "Через 10 мин": "через 10 минут",
                 "Через 30 мин": "через 30 минут",
                 "Через 1 час": "через 1 час",
-                "Через 2 часа": "через 2 часа"
+                "Через 2 часа": "через 2 часа",
+                "Через 3 часа": "через 3 часа"
             }
-            if text in time_map:
-                state_data["scheduled_time"] = time_map[text]
-            else:
-                state_data["scheduled_time"] = text
+            state_data["scheduled_time"] = time_map.get(text, text)
+            state_data["state"] = BeneficiaryState.ASKING_DETAILS
+            await self.bot.send_message(user_id, "Есть ли что-то дополнительное, что стоит учесть? (можно пропустить)")
+            msg_id = await self.bot.send_keyboard(user_id, "Дополнительные детали", ["Да, есть", "Нет, спасибо"])
+            state_data["last_msg_id"] = msg_id
+            state_data["last_text"] = "Есть ли что-то дополнительное?"
+            self.user_states[user_id] = state_data
+            return
+
+        # === ШАГ 3b: Ввод своего времени ===
+        if state == BeneficiaryState.CHOOSING_TIME_CUSTOM:
+            state_data["scheduled_time"] = text
             state_data["state"] = BeneficiaryState.ASKING_DETAILS
             await self.bot.send_message(user_id, "Есть ли что-то дополнительное, что стоит учесть? (можно пропустить)")
             msg_id = await self.bot.send_keyboard(user_id, "Дополнительные детали", ["Да, есть", "Нет, спасибо"])
