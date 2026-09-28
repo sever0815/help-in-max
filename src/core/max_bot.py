@@ -23,6 +23,7 @@ class MaxBot(BaseBot):
         self.user_service = UserService()
         self.beneficiary_handler = BeneficiaryHandler(self, self.request_service)
         self.volunteer_handler = VolunteerHandler(self, self.request_service, self.user_service)
+        self.user_states: Dict[str, Dict[str, Any]] = {}
 
         # verify=False обходит проблему с сертификатом Минцифры
         self.client = httpx.AsyncClient(
@@ -42,6 +43,8 @@ class MaxBot(BaseBot):
         url = f"{self.base_url}{endpoint}"
         try:
             response = await self.client.request(method, url, params=params, json=json_body)
+            if response.status_code != 200:
+                logger.error(f"API error on {method} {endpoint}: status={response.status_code}, body={response.text}")
             response.raise_for_status()
             data = response.json()
             if isinstance(data, dict) and data.get("success") is False:
@@ -58,15 +61,27 @@ class MaxBot(BaseBot):
     # ---------- Реализация BaseBot ----------
 
     async def send_message(self, user_id: str, text: str, reply_markup: Optional[Any] = None) -> int:
-        """Отправляет текстовое сообщение пользователю через MAX API."""
-        payload: Dict[str, Any] = {"text": text, "format": "html"}
+        """Отправляет текстовое сообщение пользователю через MAX API.
+        К кнопке /help добавляется в конец клавиатуры автоматически.
+        """
+        help_row = [{"type": "callback", "text": "/help", "payload": "/help"}]
         if reply_markup is not None:
-            payload["attachments"] = self._build_keyboard(reply_markup)
+            if isinstance(reply_markup, list):
+                reply_markup = reply_markup + [help_row]
+            else:
+                reply_markup = [reply_markup, help_row]
+        else:
+            reply_markup = [help_row]
+        payload: Dict[str, Any] = {"text": text, "format": "html"}
+        payload["attachments"] = self._build_keyboard(reply_markup)
+        logger.info(f"Sending message to {user_id}: {text[:50]}...")
         data = await self._api_call(
             "POST", "/messages",
             params={"user_id": user_id},
             json_body=payload
         )
+        if data is None:
+            logger.error(f"Failed to send message to {user_id}")
         message = (data or {}).get("message") or {}
         mid = message.get("body", {}).get("mid") or message.get("mid") or 1
         return mid
@@ -84,12 +99,13 @@ class MaxBot(BaseBot):
         rows = [[{"type": "callback", "text": opt, "payload": opt}] for opt in options]
         return await self.send_message(user_id, text, reply_markup=rows)
 
-    async def answer_callback(self, callback_id: str, text: Optional[str] = None) -> None:
-        """Подтверждает нажатие кнопки (убирает индикатор загрузки на клиенте)."""
-        body: Dict[str, Any] = {"callback_id": callback_id}
-        if text:
-            body["notification"] = text
-        await self._api_call("POST", "/answers", json_body=body)
+    async def answer_callback(self, callback_id: str, text: str = "", attachments: Optional[list] = None) -> None:
+        """Подтверждает нажатие кнопки и обновляет сообщение, сохраняя кнопки."""
+        body: Dict[str, Any] = {"message": {"text": text}}
+        if attachments:
+            body["message"]["attachments"] = attachments
+        logger.info(f"answer_callback: callback_id={callback_id[:20]}...")
+        await self._api_call("POST", "/answers", params={"callback_id": callback_id}, json_body=body)
 
     async def edit_message(self, user_id: str, message_id: Any, text: str, reply_markup=None):
         """Редактирует сообщение бота; при неудаче отправляет новое.
@@ -113,6 +129,7 @@ class MaxBot(BaseBot):
 
     async def handle_update(self, update: dict):
         """Обрабатывает входящие события (updates) от MAX API."""
+        logger.info(f"Получен update: {update}")
         update_type = update.get("update_type")
 
         if update_type == "message_created":
@@ -145,6 +162,8 @@ class MaxBot(BaseBot):
         body = message.get("body") or {}
         text = (body.get("text") or "").strip()
 
+        logger.info(f"_handle_message_created: user_id={user_id}, text={text[:80]}")
+
         # Fallback: сообщение с контактом/кнопкой без текста — игнорируем
         if not user_id or not text:
             return
@@ -152,11 +171,30 @@ class MaxBot(BaseBot):
         # 1. Регистрация / обновление username
         await self.user_service.update_username(user_id, sender.get("username"))
 
-        # 2. Маршрутизация команд
+        # 2. Проверка ожидания ID для роли
+        state_data = self.user_states.get(user_id)
+        if state_data and state_data.get("pending_role_command"):
+            cmd = state_data["pending_role_command"]
+            target_id = text.strip()
+            logger.info(f"Pending role command: {cmd}, target_id: {target_id}")
+            role_map = {
+                "/set_admin": "admin",
+                "/remove_admin": "beneficiary",
+                "/set_volunteer": "volunteer",
+                "/remove_volunteer": "beneficiary"
+            }
+            new_role = role_map[cmd]
+            success, msg = await self.user_service.set_user_role(target_id, new_role, user_id)
+            await self.send_message(user_id, msg)
+            self.user_states.pop(user_id, None)
+            return
+
+        # 3. Маршрутизация команд
         if text.startswith("/"):
             if text.startswith("/start_request"):
-                clean_text = text.lstrip("/")
-                await self.beneficiary_handler.handle_message(user_id, clean_text)
+                # Регистрируем пользователя как beneficiary, если он ещё не в базе
+                await self.user_service.update_username(user_id, sender.get("username"))
+                await self.beneficiary_handler.handle_message(user_id, text)
             elif text.startswith("/start"):
                 await self.handle_start(user_id)
             elif text.startswith("/help"):
@@ -170,39 +208,69 @@ class MaxBot(BaseBot):
             elif text.startswith(("/set_admin", "/remove_admin", "/set_volunteer", "/remove_volunteer")):
                 await self.handle_role_command(user_id, text)
             elif text.startswith(("/take", "/complete", "/view_requests")):
-                clean_text = text.lstrip("/")
-                await self.volunteer_handler.handle_message(user_id, clean_text)
+                await self.volunteer_handler.handle_message(user_id, text)
             else:
                 # Кастомная команда (например /Продукты), передаем без слэша
                 clean_text = text.lstrip("/")
                 await self.beneficiary_handler.handle_message(user_id, clean_text)
-                await self.volunteer_handler.handle_message(user_id, clean_text)
         else:
-            # Обычный текст
-            await self.beneficiary_handler.handle_message(user_id, text)
-            await self.volunteer_handler.handle_message(user_id, text)
+            logger.info(f"Plain text from {user_id}: {text[:50]}")
+            # Обычный текст — только beneficiary
+            try:
+                await self.beneficiary_handler.handle_message(user_id, text)
+            except Exception as e:
+                logger.exception(f"Error in beneficiary_handler: {e}")
 
     async def _handle_message_callback(self, update: dict):
         """Обработка нажатий на inline-кнопки (type='callback')."""
         callback = update.get("callback") or {}
-        callback_id = callback.get("callback_id")
+        callback_id = callback.get("callback_id") or callback.get("id")
         payload = str(callback.get("payload") or "")
+        logger.info(f"_handle_message_callback: user_id={user_id}, payload={payload[:80]}")
 
-        message = self._extract_message(update)
-        sender = (message.get("sender") or {}) if message else (update.get("user") or {})
-        user_id = str(sender.get("user_id", ""))
+        # Для message_callback user_id берётся из callback.user.user_id
+        callback_user = callback.get("user") or {}
+        user_id = str(callback_user.get("user_id", ""))
         if not user_id:
             return
 
         # 1. Регистрация / обновление username
-        await self.user_service.update_username(user_id, sender.get("username"))
+        # Извлекаем данные из оригинального сообщения для обновления (чтобы кнопки не исчезли)
+        original_message = update.get("message") or {}
+        message_text = original_message.get("body", {}).get("text", "")
+        message_attachments = original_message.get("attachments") or []
+
+        await self.user_service.update_username(user_id, callback_user.get("username"))
 
         try:
-            await self.beneficiary_handler.handle_callback(user_id, payload)
-            await self.volunteer_handler.handle_message(user_id, payload)
+            # Если нажата кнопка с командой (например /start_request или /view_requests)
+            if payload.startswith("/"):
+                if payload.startswith("/start_request"):
+                    await self.beneficiary_handler.handle_message(user_id, payload)
+                elif payload.startswith(("/take", "/complete", "/view_requests")):
+                    await self.volunteer_handler.handle_message(user_id, payload)
+                elif payload == "/start":
+                    await self.handle_start(user_id)
+                elif payload == "/help":
+                    await self.handle_help(user_id)
+                elif payload == "/list_users":
+                    await self.handle_list_users(user_id)
+                elif payload == "/get_id":
+                    await self.handle_get_id(user_id, payload)
+                elif payload.startswith(("/set_admin", "/remove_admin", "/set_volunteer", "/remove_volunteer")):
+                    await self.handle_role_command(user_id, payload)
+                else:
+                    await self.beneficiary_handler.handle_message(user_id, payload.lstrip("/"))
+            else:
+                await self.beneficiary_handler.handle_callback(user_id, payload)
+        except Exception:
+            logger.exception("Error handling callback payload: %s", payload)
         finally:
             if callback_id:
-                await self.answer_callback(callback_id)
+                try:
+                    await self.answer_callback(callback_id, text=message_text, attachments=message_attachments)
+                except Exception:
+                    pass
 
     async def handle_start(self, user_id: str):
         role = await self.user_service.get_user_role(user_id)
@@ -219,7 +287,12 @@ class MaxBot(BaseBot):
             welcome_text += "Ваша роль пока не определена."
         
         welcome_text += "\n\nНапишите <code>/help</code>, чтобы увидеть доступные команды."
-        await self.send_message(user_id, welcome_text)
+        keyboard_rows = [
+            [{"type": "callback", "text": "/start", "payload": "/start"}],
+        ]
+        if role == "beneficiary":
+            keyboard_rows.insert(0, [{"type": "callback", "text": "/start_request", "payload": "/start_request"}])
+        await self.send_message(user_id, welcome_text, reply_markup=keyboard_rows)
 
     async def handle_help(self, user_id: str):
         role = await self.user_service.get_user_role(user_id)
@@ -255,13 +328,18 @@ class MaxBot(BaseBot):
             return
 
         help_text = f"<b>🔧 Доступные команды ({role}):</b>\n\n"
+        
+        # Формируем список инлайн-кнопок для быстрого вызова
+        keyboard_rows = []
         for cmd, desc in cmds:
             help_text += f"🔹 <b>{cmd}</b> — {desc}\n"
-        help_text += "\n<i>Нажмите на команду или скопируйте её, чтобы вставить в сообщение.</i>"
+            # Берем команду без аргументов для кнопки (например, /take)
+            pure_cmd = cmd.split()[0]
+            keyboard_rows.append([{"type": "callback", "text": pure_cmd, "payload": pure_cmd}])
             
-        mid = await self.send_message(user_id, help_text)
-        # Пробуем закрепить сообщение
-        await self.pin_message(mid)
+        help_text += "\n<i>Нажмите на кнопку ниже для быстрого вызова команды.</i>"
+            
+        await self.send_message(user_id, help_text, reply_markup=keyboard_rows)
 
     async def handle_admin_panel(self, user_id: str):
         user_role = await self.user_service.get_user_role(user_id)
@@ -304,25 +382,32 @@ class MaxBot(BaseBot):
 
     async def handle_role_command(self, user_id: str, text: str):
         parts = text.split()
-        if len(parts) != 2:
-            await self.send_message(user_id, "Использование: /command <user_id>")
+        cmd = parts[0]
+        valid_cmds = {"/set_admin", "/remove_admin", "/set_volunteer", "/remove_volunteer"}
+        if cmd not in valid_cmds:
+            await self.send_message(user_id, "Неизвестная команда.")
             return
-        cmd, target_id = parts[0], parts[1]
 
-        role_map = {
-            "/set_admin": "admin",
-            "/remove_admin": "beneficiary",
-            "/set_volunteer": "volunteer",
-            "/remove_volunteer": "beneficiary"
-        }
+        if len(parts) == 1:
+            # Сохраняем ожидание ID
+            self.user_states[user_id] = {"pending_role_command": cmd}
+            await self.send_message(user_id, f"Введите ID пользователя для {cmd}:")
+            return
 
-        if cmd in ["/set_admin", "/set_volunteer"]:
+        if len(parts) >= 2:
+            target_id = parts[1]
+            role_map = {
+                "/set_admin": "admin",
+                "/remove_admin": "beneficiary",
+                "/set_volunteer": "volunteer",
+                "/remove_volunteer": "beneficiary"
+            }
             new_role = role_map[cmd]
             success, msg = await self.user_service.set_user_role(target_id, new_role, user_id)
             await self.send_message(user_id, msg)
-        elif cmd in ["/remove_admin", "/remove_volunteer"]:
-            success, msg = await self.user_service.remove_role(target_id, user_id)
-            await self.send_message(user_id, msg)
+            # Убираем pending state, если был
+            if user_id in self.user_states:
+                self.user_states.pop(user_id)
 
     async def set_bot_commands(self):
         """Регистрирует команды в платформе для отображения в меню '/' (используя поле 'name')."""

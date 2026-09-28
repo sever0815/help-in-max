@@ -20,7 +20,7 @@ class VolunteerHandler:
         if text.startswith("/view_requests"):
             requests = await self.request_service.get_new_requests()
             if not requests:
-                await self.bot.send_message(user_id, "На данный момент новых заявок нет.")
+                await self.bot.send_message(user_id, "Заявок нет")
                 return
 
             response = "Список доступных заявок:\n"

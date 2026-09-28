@@ -89,6 +89,7 @@ class UserService:
     async def update_username(self, platform_user_id: str, username: str):
         if not username:
             return
+        from config.settings import ADMIN_USER_IDS
         async with AsyncSessionLocal() as session:
             result = await session.execute(
                 select(UserDB).filter(UserDB.platform_user_id == str(platform_user_id))
@@ -99,6 +100,11 @@ class UserService:
                     user.username = username
                     await session.commit()
             else:
-                new_user = UserDB(platform_user_id=str(platform_user_id), username=username, role="beneficiary")
+                # Определяем роль при регистрации
+                if str(platform_user_id) in [str(i).strip() for i in ADMIN_USER_IDS]:
+                    role = "superadmin"
+                else:
+                    role = "beneficiary"
+                new_user = UserDB(platform_user_id=str(platform_user_id), username=username, role=role)
                 session.add(new_user)
                 await session.commit()
