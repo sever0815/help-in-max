@@ -6,6 +6,7 @@ from src.services.request_service import RequestService
 class BeneficiaryState(Enum):
     IDLE = "idle"
     CHOOSING_HELP_TYPE = "choosing_help_type"
+    CHOOSING_HELP_TYPE_CUSTOM = "choosing_help_type_custom"
     PROVIDING_ADDRESS = "providing_address"
     CHOOSING_TIME = "choosing_time"
     CHOOSING_TIME_CUSTOM = "choosing_time_custom"
