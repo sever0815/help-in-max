@@ -108,9 +108,7 @@ class UserService:
             result = await session.execute(select(UserDB))
             return result.scalars().all()
 
-    async def update_username(self, platform_user_id: str, username: str):
-        if not username:
-            return
+    async def update_username(self, platform_user_id: str, username: str, full_name: str = None):
         from config.settings import ADMIN_USER_IDS
         async with AsyncSessionLocal() as session:
             result = await session.execute(
@@ -118,15 +116,22 @@ class UserService:
             )
             user = result.scalar_one_or_none()
             if user:
-                if user.username != username:
+                if username and user.username != username:
                     user.username = username
-                    await session.commit()
+                if full_name and user.full_name != full_name:
+                    user.full_name = full_name
+                await session.commit()
             else:
                 # Определяем роль при регистрации
                 if str(platform_user_id) in [str(i).strip() for i in ADMIN_USER_IDS]:
                     role = "superadmin"
                 else:
                     role = "beneficiary"
-                new_user = UserDB(platform_user_id=str(platform_user_id), username=username, role=role)
+                new_user = UserDB(
+                    platform_user_id=str(platform_user_id),
+                    username=username,
+                    full_name=full_name,
+                    role=role
+                )
                 session.add(new_user)
                 await session.commit()
