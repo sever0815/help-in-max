@@ -263,6 +263,79 @@ class MaxBot(BaseBot):
                     # Отправляем ID отдельным сообщением для копирования
                     id_to_copy = payload.split(":", 1)[1]
                     await self.send_message(user_id, f"ID: {id_to_copy}")
+                elif payload.startswith("view_request:"):
+                    # Показать полную информацию о заявке
+                    request_id = int(payload.split(":", 1)[1])
+                    request = await self.request_service.get_request_by_id(request_id)
+                    if request:
+                        # Получаем ФИО пользователя
+                        from src.db.models import AsyncSessionLocal, UserDB
+                        from sqlalchemy.future import select
+                        async with AsyncSessionLocal() as session:
+                            result = await session.execute(
+                                select(UserDB).filter(UserDB.platform_user_id == str(request.beneficiary_id))
+                            )
+                            user = result.scalar_one_or_none()
+                            user_name = user.full_name if user and user.full_name else "—"
+
+                        full_info = (f"📋 <b>Заявка #{request.id}</b>\n\n"
+                                     f"👕 Категория: {request.category}\n"
+                                     f"📍 Адрес: {request.address}\n"
+                                     f"🕐 Время: {request.scheduled_time}\n"
+                                     f"📞 Телефон: {request.phone or '—'}\n"
+                                     f"📝 Детали: {request.description or '—'}\n"
+                                     f"👤 ФИО: {user_name}\n"
+                                     f"📊 Статус: {request.status}")
+                        # Кнопки Принять/Отклонить
+                        keyboard = [
+                            [{"type": "callback", "text": "Принять", "payload": f"accept_request:{request.id}"}],
+                            [{"type": "callback", "text": "Отклонить", "payload": f"reject_request:{request.id}"}]
+                        ]
+                        await self.send_message(user_id, full_info, reply_markup=keyboard)
+                    else:
+                        await self.send_message(user_id, "Заявка не найдена.")
+                elif payload.startswith("accept_request:"):
+                    # Принять заявку
+                    request_id = int(payload.split(":", 1)[1])
+                    request = await self.request_service.accept_request(request_id, user_id)
+                    if request:
+                        # Получаем ФИО пользователя
+                        from src.db.models import AsyncSessionLocal, UserDB
+                        from sqlalchemy.future import select
+                        async with AsyncSessionLocal() as session:
+                            result = await session.execute(
+                                select(UserDB).filter(UserDB.platform_user_id == str(request.beneficiary_id))
+                            )
+                            user = result.scalar_one_or_none()
+                            user_name = user.full_name if user and user.full_name else "—"
+
+                        full_info = (f"📋 <b>Заявка #{request.id}</b>\n\n"
+                                     f"👕 Категория: {request.category}\n"
+                                     f"📍 Адрес: {request.address}\n"
+                                     f"🕐 Время: {request.scheduled_time}\n"
+                                     f"📞 Телефон: {request.phone or '—'}\n"
+                                     f"📝 Детали: {request.description or '—'}\n"
+                                     f"👤 ФИО: {user_name}\n"
+                                     f"📊 Статус: {request.status}")
+                        # Кнопка Завершить
+                        keyboard = [
+                            [{"type": "callback", "text": "Завершить", "payload": f"complete_request:{request.id}"}]
+                        ]
+                        await self.send_message(user_id, full_info, reply_markup=keyboard)
+                    else:
+                        await self.send_message(user_id, "Не удалось принять заявку. Возможно, она уже принята или не существует.")
+                elif payload.startswith("reject_request:"):
+                    # Отклонить заявку (просто скрываем для волонтера)
+                    request_id = int(payload.split(":", 1)[1])
+                    await self.send_message(user_id, f"Заявка #{request_id} отклонена.")
+                elif payload.startswith("complete_request:"):
+                    # Завершить заявку
+                    request_id = int(payload.split(":", 1)[1])
+                    request = await self.request_service.complete_request(request_id)
+                    if request:
+                        await self.send_message(user_id, f"Заявка #{request_id} завершена.")
+                    else:
+                        await self.send_message(user_id, "Не удалось завершить заявку.")
                 else:
                     await self.beneficiary_handler.handle_message(user_id, payload.lstrip("/"))
             else:
@@ -338,7 +411,8 @@ class MaxBot(BaseBot):
         keyboard_rows = []
         for cmd, desc in cmds:
             help_text += f"🔹 <b>{cmd}</b> — {desc}\n"
-            # Берем команду без аргументов для кнопки (например, /take)
+            # Для команд с <ID> кнопка содержит только команду без аргумента
+            # чтобы при нажатии бот запросил ID
             pure_cmd = cmd.split()[0]
             keyboard_rows.append([{"type": "callback", "text": pure_cmd, "payload": pure_cmd}])
             

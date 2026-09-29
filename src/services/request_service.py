@@ -32,7 +32,7 @@ class RequestService:
                            f"Категория: {new_request.category}\n"
                            f"Адрес: {new_request.address}\n"
                            f"Время: {new_request.scheduled_time}")
-                    await self.notification_service.notify_volunteers(msg)
+                    await self.notification_service.notify_volunteers(msg, request_id=new_request.id)
 
                 return new_request
         except Exception as e:

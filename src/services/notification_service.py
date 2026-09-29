@@ -11,7 +11,7 @@ class NotificationService:
     def __init__(self, bot: BaseBot):
         self.bot = bot
 
-    async def notify_volunteers(self, message: str):
+    async def notify_volunteers(self, message: str, request_id: int = None):
         async with AsyncSessionLocal() as session:
             # Уведомляем только тех, у кого роль 'volunteer'
             result = await session.execute(
@@ -23,7 +23,11 @@ class NotificationService:
                 try:
                     # MAX user_id — всегда число; пропускаем мусорные ID
                     if volunteer.platform_user_id.isdigit():
-                        await self.bot.send_message(volunteer.platform_user_id, message)
+                        if request_id:
+                            keyboard = [[{"type": "callback", "text": "Посмотреть заявку", "payload": f"view_request:{request_id}"}]]
+                            await self.bot.send_message(volunteer.platform_user_id, message, reply_markup=keyboard)
+                        else:
+                            await self.bot.send_message(volunteer.platform_user_id, message)
                     else:
                         logger.info(f"Пропуск пользователя {volunteer.platform_user_id}: ID не является числом")
                 except Exception as e:
