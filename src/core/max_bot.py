@@ -166,6 +166,11 @@ class MaxBot(BaseBot):
         if not user_id or not text:
             return
 
+        # Проверка блокировки — заблокированные пользователи полностью игнорируются
+        user_role = await self.user_service.get_user_role(user_id)
+        if user_role == "blocked":
+            return
+
         # 1. Регистрация / обновление username
         await self.user_service.update_username(user_id, sender.get("username"))
 
@@ -204,7 +209,7 @@ class MaxBot(BaseBot):
                 await self.handle_list_users(user_id)
             elif text.startswith("/get_id"):
                 await self.handle_get_id(user_id, text)
-            elif text.startswith(("/set_admin", "/remove_admin", "/set_volunteer", "/remove_volunteer")):
+            elif text.startswith(("/set_admin", "/remove_admin", "/set_volunteer", "/remove_volunteer", "/block", "/unblock")):
                 await self.handle_role_command(user_id, text)
             elif text.startswith("/set_name"):
                 await self.handle_set_name(user_id, text)
@@ -230,6 +235,11 @@ class MaxBot(BaseBot):
         callback_user = callback.get("user") or {}
         user_id = str(callback_user.get("user_id", ""))
         if not user_id:
+            return
+
+        # Проверка блокировки — заблокированные пользователи полностью игнорируются
+        user_role = await self.user_service.get_user_role(user_id)
+        if user_role == "blocked":
             return
 
         # 1. Регистрация / обновление username
@@ -318,6 +328,10 @@ class MaxBot(BaseBot):
             elif payload.startswith("copy_id:"):
                 id_to_copy = payload.split(":", 1)[1]
                 await self.send_message(user_id, f"ID: {id_to_copy}")
+            elif payload == "/my_requests":
+                await self.handle_my_requests(user_id)
+            elif payload == "/active_request":
+                await self.handle_active_request(user_id)
             # Если нажата кнопка с командой (например /start_request или /view_requests)
             elif payload.startswith("/"):
                 if payload.startswith("/start_request"):
@@ -381,6 +395,7 @@ class MaxBot(BaseBot):
             ],
             "volunteer": [
                 ("/view_requests", "Список новых заявок"),
+                ("/active_request", "Моя активная заявка"),
                 ("/take <ID>", "Взять заявку"),
                 ("/complete <ID>", "Завершить заявку")
             ],
@@ -389,6 +404,8 @@ class MaxBot(BaseBot):
                 ("/set_volunteer <ID>", "Назначить волонтера"),
                 ("/remove_volunteer <ID>", "Удалить волонтера"),
                 ("/set_name <ID> <ФИО>", "Добавить ФИО пользователя"),
+                ("/block <ID>", "Заблокировать пользователя"),
+                ("/unblock <ID>", "Разблокировать пользователя"),
                 ("/list_users", "Список всех пользователей"),
                 ("/get_id", "Узнать ID")
             ],
@@ -398,6 +415,8 @@ class MaxBot(BaseBot):
                 ("/set_volunteer <ID>", "Назначить волонтера"),
                 ("/remove_volunteer <ID>", "Удалить волонтера"),
                 ("/set_name <ID> <ФИО>", "Добавить ФИО пользователя"),
+                ("/block <ID>", "Заблокировать пользователя"),
+                ("/unblock <ID>", "Разблокировать пользователя"),
                 ("/list_users", "Список всех пользователей"),
                 ("/get_id", "Узнать ID")
             ]
@@ -422,6 +441,47 @@ class MaxBot(BaseBot):
         help_text += "\n<i>Нажмите на кнопку ниже для быстрого вызова команды.</i>"
             
         await self.send_message(user_id, help_text, reply_markup=keyboard_rows)
+
+    async def handle_active_request(self, user_id: str):
+        """Показать активную заявку волонтёра с кнопкой завершения."""
+        from src.db.models import AsyncSessionLocal, UserDB
+        from sqlalchemy.future import select
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                select(RequestDB).filter(
+                    RequestDB.volunteer_id == str(user_id),
+                    RequestDB.status == "accepted"
+                )
+            )
+            request = result.scalar_one_or_none()
+
+        if not request:
+            await self.send_message(user_id, "У вас нет активных заявок.")
+            return
+
+        # Получаем ФИО пользователя
+        from src.db.models import AsyncSessionLocal, UserDB
+        from sqlalchemy.future import select
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                select(UserDB).filter(UserDB.platform_user_id == str(request.beneficiary_id))
+            )
+            user = result.scalar_one_or_none()
+            user_name = user.full_name if user and user.full_name else "—"
+
+        full_info = (f"📋 <b>Ваша активная заявка #{request.id}</b>\n\n"
+                     f"👕 Категория: {request.category}\n"
+                     f"📍 Адрес: {request.address}\n"
+                     f"🕐 Время: {request.scheduled_time}\n"
+                     f"📞 Телефон: {request.phone or '—'}\n"
+                     f"📝 Детали: {request.description or '—'}\n"
+                     f"👤 ФИО: {user_name}\n"
+                     f"📊 Статус: Принята")
+
+        keyboard = [
+            [{"type": "callback", "text": "Завершить", "payload": f"complete_request:{request.id}"}]
+        ]
+        await self.send_message(user_id, full_info, reply_markup=keyboard)
 
     async def handle_my_requests(self, user_id: str):
         """Показать заявки пользователя с кнопкой отмены."""
@@ -550,7 +610,7 @@ class MaxBot(BaseBot):
     async def handle_role_command(self, user_id: str, text: str):
         parts = text.split()
         cmd = parts[0]
-        valid_cmds = {"/set_admin", "/remove_admin", "/set_volunteer", "/remove_volunteer"}
+        valid_cmds = {"/set_admin", "/remove_admin", "/set_volunteer", "/remove_volunteer", "/block", "/unblock"}
         if cmd not in valid_cmds:
             await self.send_message(user_id, "Неизвестная команда.")
             return
@@ -567,7 +627,9 @@ class MaxBot(BaseBot):
                 "/set_admin": "admin",
                 "/remove_admin": "beneficiary",
                 "/set_volunteer": "volunteer",
-                "/remove_volunteer": "beneficiary"
+                "/remove_volunteer": "beneficiary",
+                "/block": "blocked",
+                "/unblock": "beneficiary"
             }
             new_role = role_map[cmd]
             success, msg = await self.user_service.set_user_role(target_id, new_role, user_id)

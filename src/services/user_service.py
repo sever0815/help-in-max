@@ -4,7 +4,7 @@ from config.settings import ADMIN_USER_IDS
 
 class UserService:
     def get_role_power(self, role: str) -> int:
-        levels = {"beneficiary": 0, "volunteer": 1, "admin": 2, "superadmin": 3}
+        levels = {"blocked": -1, "beneficiary": 0, "volunteer": 1, "admin": 2, "superadmin": 3}
         return levels.get(role, 0)
 
     @staticmethod
