@@ -65,8 +65,8 @@ docker compose up --build -d
 
 ## Зависимости
 
-- Python 3.13
-- aiosqlite, httpx, sqlalchemy, python-dotenv, pydantic, greenlet
+- Docker и Docker Compose (установить по инструкции: https://docs.docker.com/get-docker/)
+- Все зависимости зафиксированы в `requirements.txt` и устанавливаются автоматически при сборке Docker-образа.
 
 ## Внешние сервисы
 
