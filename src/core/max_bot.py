@@ -265,6 +265,8 @@ class MaxBot(BaseBot):
                         user = result.scalar_one_or_none()
                         user_name = user.full_name if user and user.full_name else "—"
 
+                    status_map = {"new": "Ожидает", "accepted": "Принята", "completed": "Завершена", "cancelled": "Отменена"}
+                    status_text = status_map.get(request.status, request.status)
                     full_info = (f"📋 <b>Заявка #{request.id}</b>\n\n"
                                  f"👕 Категория: {request.category}\n"
                                  f"📍 Адрес: {request.address}\n"
@@ -272,7 +274,7 @@ class MaxBot(BaseBot):
                                  f"📞 Телефон: {request.phone or '—'}\n"
                                  f"📝 Детали: {request.description or '—'}\n"
                                  f"👤 ФИО: {user_name}\n"
-                                 f"📊 Статус: {request.status}")
+                                 f"📊 Статус: {status_text}")
                     keyboard = [
                         [{"type": "callback", "text": "Принять", "payload": f"accept_request:{request.id}"}],
                         [{"type": "callback", "text": "Отклонить", "payload": f"reject_request:{request.id}"}]
@@ -293,6 +295,8 @@ class MaxBot(BaseBot):
                         user = result.scalar_one_or_none()
                         user_name = user.full_name if user and user.full_name else "—"
 
+                    status_map = {"new": "Ожидает", "accepted": "Принята", "completed": "Завершена", "cancelled": "Отменена"}
+                    status_text = status_map.get(request.status, request.status)
                     full_info = (f"📋 <b>Заявка #{request.id}</b>\n\n"
                                  f"👕 Категория: {request.category}\n"
                                  f"📍 Адрес: {request.address}\n"
@@ -300,7 +304,7 @@ class MaxBot(BaseBot):
                                  f"📞 Телефон: {request.phone or '—'}\n"
                                  f"📝 Детали: {request.description or '—'}\n"
                                  f"👤 ФИО: {user_name}\n"
-                                 f"📊 Статус: {request.status}")
+                                 f"📊 Статус: {status_text}")
                     keyboard = [
                         [{"type": "callback", "text": "Завершить", "payload": f"complete_request:{request.id}"}]
                     ]
@@ -473,7 +477,7 @@ class MaxBot(BaseBot):
                      f"📞 Телефон: {request.phone or '—'}\n"
                      f"📝 Детали: {request.description or '—'}\n"
                      f"👤 ФИО: {user_name}\n"
-                     f"📊 Статус: Принята")
+                     f"📊 Статус: Принята вами")
 
         keyboard = [
             [{"type": "callback", "text": "Завершить", "payload": f"complete_request:{request.id}"}]

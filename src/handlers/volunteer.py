@@ -41,17 +41,20 @@ class VolunteerHandler:
                     else:
                         user_names[uid] = "—"
 
+            status_map = {"new": "Ожидает", "accepted": "Принята", "completed": "Завершена", "cancelled": "Отменена"}
             response = "Список доступных заявок:\n"
             for r in requests:
                 name = user_names.get(r.beneficiary_id, "—")
                 phone = r.phone or "—"
+                status_text = status_map.get(r.status, r.status)
                 response += (f"ID: {r.id}\n"
                              f"  Категория: {r.category}\n"
                              f"  Адрес: {r.address}\n"
                              f"  Время: {r.scheduled_time}\n"
                              f"  Телефон: {phone}\n"
                              f"  Детали: {r.description or '—'}\n"
-                             f"  ФИО: {name}\n\n")
+                             f"  ФИО: {name}\n"
+                             f"  Статус: {status_text}\n\n")
             await self.bot.send_message(user_id, response)
 
         elif text.startswith("/take "):
