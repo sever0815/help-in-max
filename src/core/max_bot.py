@@ -307,6 +307,14 @@ class MaxBot(BaseBot):
                     await self.send_message(user_id, f"Заявка #{request_id} завершена.")
                 else:
                     await self.send_message(user_id, "Не удалось завершить заявку.")
+            elif payload.startswith("cancel_request:"):
+                # Отмена заявки пользователем
+                request_id = int(payload.split(":", 1)[1])
+                request = await self.request_service.cancel_request(request_id)
+                if request:
+                    await self.send_message(user_id, f"Заявка #{request_id} отменена.")
+                else:
+                    await self.send_message(user_id, "Не удалось отменить заявку.")
             elif payload.startswith("copy_id:"):
                 id_to_copy = payload.split(":", 1)[1]
                 await self.send_message(user_id, f"ID: {id_to_copy}")
@@ -367,7 +375,10 @@ class MaxBot(BaseBot):
         
         # Определяем команды по ролям
         commands = {
-            "beneficiary": [("/start_request", "Создать заявку на помощь")],
+            "beneficiary": [
+                ("/start_request", "Создать заявку на помощь"),
+                ("/my_requests", "Мои заявки")
+            ],
             "volunteer": [
                 ("/view_requests", "Список новых заявок"),
                 ("/take <ID>", "Взять заявку"),
@@ -411,6 +422,52 @@ class MaxBot(BaseBot):
         help_text += "\n<i>Нажмите на кнопку ниже для быстрого вызова команды.</i>"
             
         await self.send_message(user_id, help_text, reply_markup=keyboard_rows)
+
+    async def handle_my_requests(self, user_id: str):
+        """Показать заявки пользователя с кнопкой отмены."""
+        requests = await self.request_service.get_user_requests(user_id)
+        if not requests:
+            await self.send_message(user_id, "У вас нет заявок.")
+            return
+
+        for req in requests:
+            # Получаем ФИО волонтёра, если заявка принята
+            volunteer_name = "—"
+            if req.volunteer_id:
+                from src.db.models import AsyncSessionLocal, UserDB
+                from sqlalchemy.future import select
+                async with AsyncSessionLocal() as session:
+                    result = await session.execute(
+                        select(UserDB).filter(UserDB.platform_user_id == str(req.volunteer_id))
+                    )
+                    volunteer = result.scalar_one_or_none()
+                    if volunteer and volunteer.full_name:
+                        volunteer_name = volunteer.full_name
+
+            status_map = {
+                "new": "Ожидает",
+                "accepted": f"Принята: {volunteer_name}",
+                "completed": "Завершена",
+                "cancelled": "Отменена"
+            }
+            status_text = status_map.get(req.status, req.status)
+
+            request_info = (f"📋 <b>Заявка #{req.id}</b>\n\n"
+                           f"👕 Категория: {req.category}\n"
+                           f"📍 Адрес: {req.address}\n"
+                           f"🕐 Время: {req.scheduled_time}\n"
+                           f"📞 Телефон: {req.phone or '—'}\n"
+                           f"📝 Детали: {req.description or '—'}\n"
+                           f"📊 Статус: {status_text}")
+
+            # Кнопка отмены только для активных заявок
+            if req.status in ("new", "accepted"):
+                keyboard = [
+                    [{"type": "callback", "text": "Отклонить", "payload": f"cancel_request:{req.id}"}]
+                ]
+                await self.send_message(user_id, request_info, reply_markup=keyboard)
+            else:
+                await self.send_message(user_id, request_info)
 
     async def handle_admin_panel(self, user_id: str):
         user_role = await self.user_service.get_user_role(user_id)

@@ -18,7 +18,7 @@ class VolunteerHandler:
             return
 
         if text.startswith("/view_requests"):
-            requests = await self.request_service.get_new_requests()
+            requests = await self.request_service.get_active_requests()
             if not requests:
                 await self.bot.send_message(user_id, "Заявок нет")
                 return

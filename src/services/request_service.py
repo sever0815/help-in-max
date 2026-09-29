@@ -42,7 +42,23 @@ class RequestService:
     async def get_new_requests(self):
         async with AsyncSessionLocal() as session:
             result = await session.execute(
-                select(RequestDB).filter(RequestDB.status == RequestStatus.NEW.value)
+                select(RequestDB).filter(
+                    RequestDB.status == RequestStatus.NEW.value
+                )
+            )
+            return result.scalars().all()
+
+    async def get_active_requests(self):
+        """Получить активные заявки (новые и принятые, без отменённых)."""
+        from sqlalchemy import or_
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                select(RequestDB).filter(
+                    or_(
+                        RequestDB.status == RequestStatus.NEW.value,
+                        RequestDB.status == RequestStatus.ACCEPTED.value
+                    )
+                )
             )
             return result.scalars().all()
 
@@ -77,3 +93,24 @@ class RequestService:
                 select(RequestDB).filter(RequestDB.id == request_id)
             )
             return result.scalar_one_or_none()
+
+    async def get_user_requests(self, user_id: str):
+        """Получить все заявки пользователя."""
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                select(RequestDB).filter(RequestDB.beneficiary_id == str(user_id))
+            )
+            return result.scalars().all()
+
+    async def cancel_request(self, request_id: int):
+        """Отменить заявку (для пользователя)."""
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                select(RequestDB).filter(RequestDB.id == request_id)
+            )
+            request = result.scalar_one_or_none()
+            if request:
+                request.status = RequestStatus.CANCELLED.value
+                await session.commit()
+                return request
+            return None
