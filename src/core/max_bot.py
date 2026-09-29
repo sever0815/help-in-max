@@ -445,7 +445,9 @@ class MaxBot(BaseBot):
         keyboard_rows = []
         for cmd, desc, btn_text in cmds:
             help_text += f"🔹 <b>{cmd}</b> — {desc}\n"
-            keyboard_rows.append([{"type": "callback", "text": btn_text, "payload": cmd}])
+            # Payload — только команда без аргументов, чтобы бот запросил ID
+            payload = cmd.split()[0]
+            keyboard_rows.append([{"type": "callback", "text": btn_text, "payload": payload}])
             
         help_text += "\n<i>Нажмите на кнопку ниже для быстрого вызова команды.</i>"
             
