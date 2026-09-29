@@ -50,7 +50,7 @@ class BeneficiaryHandler:
             msg_id = await self.bot.send_keyboard(
                 user_id,
                 text_q,
-                ["Продукты", "Прогулка", "Уборка", "Другое", "Свой вариант"]
+                ["Продукты", "Прогулка", "Уборка", "Свой вариант"]
             )
             state_data["last_msg_id"] = msg_id
             state_data["last_text"] = text_q
@@ -191,7 +191,7 @@ class BeneficiaryHandler:
                         msg_id = await self.bot.send_keyboard(
                             user_id,
                             "Какую помощь вам нужна?",
-                            ["Продукты", "Прогулка", "Уборка", "Другое", "Свой вариант"]
+                            ["Продукты", "Прогулка", "Уборка", "Свой вариант"]
                         )
                         state_data["last_msg_id"] = msg_id
                     elif text == "Изменить адрес":

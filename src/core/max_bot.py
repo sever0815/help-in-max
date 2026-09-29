@@ -491,13 +491,15 @@ class MaxBot(BaseBot):
         await self.send_message(user_id, full_info, reply_markup=keyboard)
 
     async def handle_my_requests(self, user_id: str):
-        """Показать заявки пользователя с кнопкой отмены."""
+        """Показать активные заявки пользователя с кнопкой отмены."""
         requests = await self.request_service.get_user_requests(user_id)
-        if not requests:
-            await self.send_message(user_id, "У вас нет заявок.")
+        # Фильтруем — показываем только активные заявки (не завершённые и не отменённые)
+        active_requests = [r for r in requests if r.status in ("new", "accepted")]
+        if not active_requests:
+            await self.send_message(user_id, "У вас нет активных заявок.")
             return
 
-        for req in requests:
+        for req in active_requests:
             # Получаем ФИО волонтёра, если заявка принята
             volunteer_name = "—"
             if req.volunteer_id:
