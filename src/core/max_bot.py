@@ -266,9 +266,11 @@ class MaxBot(BaseBot):
                         user_name = user.full_name if user and user.full_name else "—"
 
                     status_map = {"new": "Ожидает", "accepted": "Принята", "completed": "Завершена", "cancelled": "Отменена"}
+                    category_map = {"products": "Продукты", "walk": "Прогулка", "cleaning": "Уборка", "other": "Другое"}
                     status_text = status_map.get(request.status, request.status)
+                    category_text = category_map.get(request.category, request.category)
                     full_info = (f"📋 <b>Заявка #{request.id}</b>\n\n"
-                                 f"👕 Категория: {request.category}\n"
+                                 f"👕 Категория: {category_text}\n"
                                  f"📍 Адрес: {request.address}\n"
                                  f"🕐 Время: {request.scheduled_time}\n"
                                  f"📞 Телефон: {request.phone or '—'}\n"
@@ -296,9 +298,11 @@ class MaxBot(BaseBot):
                         user_name = user.full_name if user and user.full_name else "—"
 
                     status_map = {"new": "Ожидает", "accepted": "Принята", "completed": "Завершена", "cancelled": "Отменена"}
+                    category_map = {"products": "Продукты", "walk": "Прогулка", "cleaning": "Уборка", "other": "Другое"}
                     status_text = status_map.get(request.status, request.status)
+                    category_text = category_map.get(request.category, request.category)
                     full_info = (f"📋 <b>Заявка #{request.id}</b>\n\n"
-                                 f"👕 Категория: {request.category}\n"
+                                 f"👕 Категория: {category_text}\n"
                                  f"📍 Адрес: {request.address}\n"
                                  f"🕐 Время: {request.scheduled_time}\n"
                                  f"📞 Телефон: {request.phone or '—'}\n"
@@ -470,8 +474,10 @@ class MaxBot(BaseBot):
             user = result.scalar_one_or_none()
             user_name = user.full_name if user and user.full_name else "—"
 
+        category_map = {"products": "Продукты", "walk": "Прогулка", "cleaning": "Уборка", "other": "Другое"}
+        category_text = category_map.get(request.category, request.category)
         full_info = (f"📋 <b>Ваша активная заявка #{request.id}</b>\n\n"
-                     f"👕 Категория: {request.category}\n"
+                     f"👕 Категория: {category_text}\n"
                      f"📍 Адрес: {request.address}\n"
                      f"🕐 Время: {request.scheduled_time}\n"
                      f"📞 Телефон: {request.phone or '—'}\n"
@@ -511,10 +517,12 @@ class MaxBot(BaseBot):
                 "completed": "Завершена",
                 "cancelled": "Отменена"
             }
+            category_map = {"products": "Продукты", "walk": "Прогулка", "cleaning": "Уборка", "other": "Другое"}
             status_text = status_map.get(req.status, req.status)
+            category_text = category_map.get(req.category, req.category)
 
             request_info = (f"📋 <b>Заявка #{req.id}</b>\n\n"
-                           f"👕 Категория: {req.category}\n"
+                           f"👕 Категория: {category_text}\n"
                            f"📍 Адрес: {req.address}\n"
                            f"🕐 Время: {req.scheduled_time}\n"
                            f"📞 Телефон: {req.phone or '—'}\n"

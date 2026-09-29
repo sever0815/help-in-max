@@ -42,13 +42,15 @@ class VolunteerHandler:
                         user_names[uid] = "—"
 
             status_map = {"new": "Ожидает", "accepted": "Принята", "completed": "Завершена", "cancelled": "Отменена"}
+            category_map = {"products": "Продукты", "walk": "Прогулка", "cleaning": "Уборка", "other": "Другое"}
             response = "Список доступных заявок:\n"
             for r in requests:
                 name = user_names.get(r.beneficiary_id, "—")
                 phone = r.phone or "—"
                 status_text = status_map.get(r.status, r.status)
+                category_text = category_map.get(r.category, r.category)
                 response += (f"ID: {r.id}\n"
-                             f"  Категория: {r.category}\n"
+                             f"  Категория: {category_text}\n"
                              f"  Адрес: {r.address}\n"
                              f"  Время: {r.scheduled_time}\n"
                              f"  Телефон: {phone}\n"
