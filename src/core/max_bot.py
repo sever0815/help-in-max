@@ -310,7 +310,8 @@ class MaxBot(BaseBot):
                                  f"👤 ФИО: {user_name}\n"
                                  f"📊 Статус: {status_text}")
                     keyboard = [
-                        [{"type": "callback", "text": "Завершить", "payload": f"complete_request:{request.id}"}]
+                        [{"type": "callback", "text": "Завершить", "payload": f"complete_request:{request.id}"}],
+                        [{"type": "callback", "text": "Отклонить", "payload": f"reject_request:{request.id}"}]
                     ]
                     await self.send_message(user_id, full_info, reply_markup=keyboard)
                 else:
