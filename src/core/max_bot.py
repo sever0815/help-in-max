@@ -338,9 +338,6 @@ class MaxBot(BaseBot):
                     await self.send_message(user_id, f"Заявка #{request_id} отменена.")
                 else:
                     await self.send_message(user_id, "Не удалось отменить заявку.")
-            elif payload.startswith("copy_id:"):
-                id_to_copy = payload.split(":", 1)[1]
-                await self.send_message(user_id, f"ID: {id_to_copy}")
             elif payload == "/my_requests":
                 await self.handle_my_requests(user_id)
             elif payload == "/active_request":
@@ -587,7 +584,6 @@ class MaxBot(BaseBot):
             return (u.full_name or "", u.platform_user_id)
 
         response = "<b>📋 Список пользователей:</b>\n\n"
-        keyboard_rows = []
         for cat_name, cat_users in categories.items():
             if not cat_users:
                 continue
@@ -595,11 +591,10 @@ class MaxBot(BaseBot):
             response += f"<b>{cat_name}:</b>\n"
             for user in cat_users:
                 name_str = f" | ФИО: {user.full_name}" if user.full_name else ""
-                response += f"  • {user.platform_user_id}{name_str}\n"
-                # Кнопка с ID — при нажатии бот отправит ID сообщением для копирования
-                keyboard_rows.append([{"type": "callback", "text": f"📋 {user.platform_user_id}", "payload": f"copy_id:{user.platform_user_id}"}])
+                # ID подсвечен через <code> — в MAX можно скопировать по нажатию
+                response += f"  • <code>{user.platform_user_id}</code>{name_str}\n"
             response += "\n"
-        await self.send_message(user_id, response, reply_markup=keyboard_rows)
+        await self.send_message(user_id, response)
 
     async def handle_set_name(self, user_id: str, text: str):
         parts = text.split(maxsplit=2)
