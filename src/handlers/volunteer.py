@@ -31,7 +31,7 @@ class VolunteerHandler:
 
     async def _handle_view_requests(self, user_id: str):
         """Показать список заявок с кнопками."""
-        requests = await self.request_service.get_active_requests()
+        requests = await self.request_service.get_active_requests(volunteer_id=user_id)
         if not requests:
             await self.bot.send_message(user_id, "Заявок нет")
             return

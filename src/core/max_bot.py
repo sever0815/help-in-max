@@ -317,7 +317,11 @@ class MaxBot(BaseBot):
                     await self.send_message(user_id, "Не удалось принять заявку. Возможно, она уже принята или не существует.")
             elif payload.startswith("reject_request:"):
                 request_id = int(payload.split(":", 1)[1])
-                await self.send_message(user_id, f"Заявка #{request_id} отклонена.")
+                request = await self.request_service.reject_request(request_id)
+                if request:
+                    await self.send_message(user_id, f"Заявка #{request_id} отклонена и возвращена в список доступных.")
+                else:
+                    await self.send_message(user_id, "Не удалось отклонить заявку.")
             elif payload.startswith("complete_request:"):
                 request_id = int(payload.split(":", 1)[1])
                 request = await self.request_service.complete_request(request_id)

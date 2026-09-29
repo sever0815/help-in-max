@@ -48,18 +48,33 @@ class RequestService:
             )
             return result.scalars().all()
 
-    async def get_active_requests(self):
-        """Получить активные заявки (новые и принятые, без отменённых)."""
-        from sqlalchemy import or_
+    async def get_active_requests(self, volunteer_id: str = None):
+        """Получить активные заявки (новые и принятые, без отменённых).
+        Если указан volunteer_id — показывает только свои принятые заявки + все новые."""
+        from sqlalchemy import or_, and_
         async with AsyncSessionLocal() as session:
-            result = await session.execute(
-                select(RequestDB).filter(
-                    or_(
-                        RequestDB.status == RequestStatus.NEW.value,
-                        RequestDB.status == RequestStatus.ACCEPTED.value
+            if volunteer_id:
+                # Показываем новые заявки + заявки, принятые этим волонтёром
+                result = await session.execute(
+                    select(RequestDB).filter(
+                        or_(
+                            RequestDB.status == RequestStatus.NEW.value,
+                            and_(
+                                RequestDB.status == RequestStatus.ACCEPTED.value,
+                                RequestDB.volunteer_id == str(volunteer_id)
+                            )
+                        )
                     )
                 )
-            )
+            else:
+                result = await session.execute(
+                    select(RequestDB).filter(
+                        or_(
+                            RequestDB.status == RequestStatus.NEW.value,
+                            RequestDB.status == RequestStatus.ACCEPTED.value
+                        )
+                    )
+                )
             return result.scalars().all()
 
     async def accept_request(self, request_id: int, volunteer_id: str):
@@ -111,6 +126,20 @@ class RequestService:
             request = result.scalar_one_or_none()
             if request:
                 request.status = RequestStatus.CANCELLED.value
+                await session.commit()
+                return request
+            return None
+
+    async def reject_request(self, request_id: int):
+        """Отклонить заявку (для волонтёра) — возвращает в статус ожидания."""
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                select(RequestDB).filter(RequestDB.id == request_id)
+            )
+            request = result.scalar_one_or_none()
+            if request:
+                request.status = RequestStatus.NEW.value
+                request.volunteer_id = None
                 await session.commit()
                 return request
             return None
